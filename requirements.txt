@@ -1,0 +1,11 @@
+Flask
+flask-cors
+chromadb
+langchain
+langchain-community
+langchain-core
+langchain-groq
+langchain-huggingface
+PyMuPDF
+python-dotenv
+gunicorn

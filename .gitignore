@@ -2,3 +2,7 @@
 /.vscode
 /toloka.js
 /toloka.py
+.env
+__pycache__/
+*.pyc
+uploads/

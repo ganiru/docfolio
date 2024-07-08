@@ -1,8 +1,8 @@
+import os
 import shutil
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-import os
 import chromadb
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -12,10 +12,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-PORT = 8080
+# PORT = 8080
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
@@ -26,9 +28,9 @@ chroma_client = chromadb.Client()
 
 embeddings = HuggingFaceEmbeddings()
 llm = ChatGroq(
-    groq_api_key="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",
+    groq_api_key=os.getenv('GROQ_API_KEY'),
     model_name="mixtral-8x7b-32768",
-    temperature=0.3,
+    temperature=0.4,
     streaming=True,
 )
 
@@ -149,5 +151,6 @@ def handle_options_request():
     return response
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    app.run(port=PORT, debug=True)
+    app.run(port=port, debug=True)
