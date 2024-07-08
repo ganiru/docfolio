@@ -1,6 +1,6 @@
 import os
 import shutil
-from flask import Flask, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import chromadb
@@ -149,6 +149,10 @@ def handle_options_request():
     }
     response.headers.extend(headers)
     return response
+
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
