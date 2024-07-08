@@ -22,12 +22,20 @@ document.addEventListener("DOMContentLoaded", function () {
       .then((data) => {
         documentList.innerHTML = "";
         if (data.documents.length === 0) {
+          document.getElementById("documentsHeader").style.display = "none";
           const docElement = document.createElement("div");
           docElement.className =
             "flex justify-center p-2 bg-brown-200 rounded mb-2";
           docElement.innerHTML = `<span>No documents found</span>`;
           documentList.appendChild(docElement);
         } else {
+          document.getElementById("documentsHeader").style.display = "block";
+          const documents =
+            data.documents.length === 1 ? "document" : "documents";
+          document.getElementById(
+            "documentsHeader"
+          ).innerText = `${data.documents.length} ${documents}. Select one to chat with`;
+
           data.documents.forEach((doc) => {
             const docElement = document.createElement("div");
             deleteSVG =
@@ -87,7 +95,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     document.getElementById(
       "selectedDocument"
-    ).innerHTML = `Selected documents: <b>${
+    ).innerHTML = `Selected document(s): <b>${
       currentDocuments.join(", ") || "None"
     }</b>`;
   }
@@ -96,7 +104,10 @@ document.addEventListener("DOMContentLoaded", function () {
     event.preventDefault();
     const files = event.target.files;
     if (files.length > 0) {
+      // Show loading indicator
+      document.getElementById("loading").style.display = "flex";
       const formData = new FormData();
+
       for (let i = 0; i < files.length; i++) {
         formData.append("file", files[i]);
       }
@@ -117,8 +128,16 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         .then((data) => {
           console.log(data.message);
+          // Show loading indicator
+          document.getElementById("loading").style.display = "none";
           updateDocumentList();
           fileUpload.value = ""; // Reset file input
+
+          // Select the file if there's only one file uploaded
+          /* if (filename !== "") {
+            console.log("from filename");
+            toggleDocument(filename);
+          } */
         })
         .catch((error) => {
           console.error("Error uploading:", error);

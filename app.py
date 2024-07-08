@@ -15,7 +15,7 @@ from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 # PORT = 8080
 
@@ -74,6 +74,8 @@ def upload_file():
 
     if uploaded_files:
         message = "Files uploaded successfully"
+        # delete the file from the server after loading it into Chroma
+        os.remove(file_path)
         if errors:
             message += f", but with some errors: {'; '.join(errors)}"
         return jsonify({"message": message, "filenames": uploaded_files}), 200
@@ -93,7 +95,7 @@ def query():
         combined_retriever = []
         for filename in filenames:
             vectorstore = Chroma(collection_name=filename, embedding_function=embeddings)
-            combined_retriever.extend(vectorstore.as_retriever().get_relevant_documents(query))
+            combined_retriever.extend(vectorstore.as_retriever().invoke(query))
 
         template = """Use the following pieces of context to answer the question at the end. 
         If you don't know the answer, just say that you don't know, don't try to make up an answer.
@@ -128,12 +130,12 @@ def get_documents():
 def delete_document(filename):
     try:
         chroma_client.delete_collection(filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"File {file_path} deleted successfully")
-        else:
-            print(f"File {file_path} not found")
+        # file_path = os.path.join(UPLOAD_FOLDER, filename)
+        # if os.path.exists(file_path):
+        #     os.remove(file_path)
+        #     print(f"File {file_path} deleted successfully")
+        # else:
+        #     print(f"File {file_path} not found")
             
         return jsonify({"message": f"Document {filename} deleted successfully"}), 200
     except Exception as e:
