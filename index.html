@@ -36,10 +36,9 @@
             <!-- Left column -->
             <div class="w-full md:w-1/3 bg-brown-100 p-4 rounded-lg">
                 <!-- <h4 class="text-xl mb-4">Uploaded Documents</h4> -->
-                <div id="documentList" class="space-y-2"></div>
                 <div class="mt-4">
-                    <label for="fileUpload" class="block text-sm font-medium text-brown-700">Upload PDF</label>
-                    <input type="file" id="fileUpload" accept=".pdf" 
+                    <label for="fileUpload" class="block text-sm font-medium text-brown-700">Upload PDFs</label>
+                    <input type="file" id="fileUpload" accept=".pdf" multiple
                         class="mt-1 block w-full text-sm text-brown-900
                         file:mr-4 file:py-2 file:px-4
                         file:rounded-full file:border-0
@@ -48,11 +47,12 @@
                         hover:file:bg-brown-100 cursor-pointer
                     ">
                 </div>
+                <div id="documentList" class="space-y-2"></div>
             </div>
             
             <!-- Right column -->
             <div class="w-full md:w-2/3 bg-brown-100 p-4 rounded-lg">
-                <h5 style="text-align: center;" id="selectedDocument">Select a document to chat with</h5>
+                <h5 style="text-align: center;" id="selectedDocument">Select documents to chat with</h5>
                 <div id="chatWindow" class="h-96 overflow-y-auto mb-4 p-4 bg-white rounded-lg"></div>
                 <div class="flex">
                     <input type="text" id="queryInput" placeholder="Type your query here..." class="flex-grow p-2 border border-brown-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-brown-500">
