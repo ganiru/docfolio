@@ -17,7 +17,6 @@ load_dotenv()
 
 app = Flask(__name__, template_folder='templates')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-# PORT = 8080
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
@@ -129,14 +128,7 @@ def get_documents():
 @app.route('/delete/<filename>', methods=['DELETE'])
 def delete_document(filename):
     try:
-        chroma_client.delete_collection(filename)
-        # file_path = os.path.join(UPLOAD_FOLDER, filename)
-        # if os.path.exists(file_path):
-        #     os.remove(file_path)
-        #     print(f"File {file_path} deleted successfully")
-        # else:
-        #     print(f"File {file_path} not found")
-            
+        chroma_client.delete_collection(filename)            
         return jsonify({"message": f"Document {filename} deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": f"Failed to delete document: {str(e)}"}), 400
