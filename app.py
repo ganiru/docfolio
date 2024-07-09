@@ -53,8 +53,11 @@ def upload_file():
             continue
         if file and allowed_file(file.filename):
             try:
+                print(f"File {file.filename} is allowed")
                 filename = secure_filename(file.filename)
+                print("filename: ", filename)
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                print("file_path", file_path)
                 file.save(file_path)
                 print(f"File saved to {file_path}")
 
@@ -62,8 +65,9 @@ def upload_file():
                 documents = loader.load()
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
                 texts = text_splitter.split_documents(documents)
-                print(f"Loaded {len(texts)} chunks from the PDF")
+                print(f"Saving {len(texts)} chunks from the PDF into Chroma")
                 Chroma.from_documents(texts, embeddings, collection_name=filename)
+                print(f"Loaded {len(texts)} chunks into Chroma")
                 
                 uploaded_files.append(filename)
             except Exception as e:
@@ -73,6 +77,7 @@ def upload_file():
 
     if uploaded_files:
         message = "Files uploaded successfully"
+        print(message)
         # delete the file from the server after loading it into Chroma
         os.remove(file_path)
         if errors:
