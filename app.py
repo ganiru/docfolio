@@ -55,6 +55,9 @@ def upload_file():
     uploaded_files = []
     errors = []
 
+    # Make sure the upload folder exists
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
     for file in files:
         if file.filename == '':
             continue
@@ -189,6 +192,8 @@ def sanitize_filename(filename):
 if __name__ == '__main__':
     logger.info("Starting server")
     port = int(os.environ.get('PORT', 8080))
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    logger.info("UPLOAD_FOLDER seet")
+    
+    # Ensure the upload folder exists
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    logger.info("UPLOAD_FOLDER set")
     app.run(port=port, debug=True)
