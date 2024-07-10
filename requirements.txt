@@ -9,3 +9,4 @@ langchain-huggingface
 PyMuPDF
 python-dotenv
 gunicorn
+werkzeug

@@ -1,5 +1,6 @@
 import os
 import shutil
+import unicodedata
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -57,13 +58,22 @@ def upload_file():
     for file in files:
         if file.filename == '':
             continue
+        
+        if not isinstance(file.filename, str):
+            logger.error(f"Unexpected filename type: {type(file.filename)}")
+
         if file and allowed_file(file.filename):
             try:
-                logger.info(f"File {file.filename} is allowed")
-                filename = secure_filename(file.filename)
-                logger.info("filename: ", filename)
+                logger.info(f"Original filename: {file.filename}")
+                logger.info(f"Filename type: {type(file.filename)}")
+                try:
+                    filename = sanitize_filename(file.filename)
+                    logger.info(f"Sanitized filename: {filename}")
+                except Exception as e:
+                    logger.error(f"Error sanitizing filename: {str(e)}")
+                logger.info(f"filename: {filename}")
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                logger.info("file_path", file_path)
+                logger.info(f"file_path {file_path}")
                 file.save(file_path)
                 logger.info(f"File saved to {file_path}")
 
@@ -162,6 +172,15 @@ def handle_options_request():
 @app.route('/')
 def home():
     return render_template('index.html')
+
+
+def sanitize_filename(filename):
+    # Normalize the filename to decomposed form
+    filename = unicodedata.normalize('NFKD', filename)
+    # Remove non-ASCII characters
+    filename = filename.encode('ASCII', 'ignore').decode('ASCII')
+    # Use secure_filename to handle the rest
+    return secure_filename(filename)
 
 if __name__ == '__main__':
     logger.info("Starting server")
