@@ -13,7 +13,13 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
+import logging
+
 load_dotenv()
+logger = logging.getLogger(__name__)
+
+logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, template_folder='templates')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -53,13 +59,13 @@ def upload_file():
             continue
         if file and allowed_file(file.filename):
             try:
-                print(f"File {file.filename} is allowed")
+                logger.info(f"File {file.filename} is allowed")
                 filename = secure_filename(file.filename)
-                print("filename: ", filename)
+                logger.info("filename: ", filename)
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                print("file_path", file_path)
+                logger.info("file_path", file_path)
                 file.save(file_path)
-                print(f"File saved to {file_path}")
+                logger.info(f"File saved to {file_path}")
 
                 loader = PyMuPDFLoader(file_path)
                 documents = loader.load()
@@ -68,11 +74,14 @@ def upload_file():
                 print(f"Saving {len(texts)} chunks from the PDF into Chroma")
                 Chroma.from_documents(texts, embeddings, collection_name=filename)
                 print(f"Loaded {len(texts)} chunks into Chroma")
-                
+                logger.info(f"Saved {len(texts)} chunks into Chroma")
+
                 uploaded_files.append(filename)
             except Exception as e:
+                logger.error(f"Error processing {filename}: {str(e)}")
                 errors.append(f"Error processing {filename}: {str(e)}")
         else:
+            logger.error(f"Invalid file type for {file.filename}")
             errors.append(f"Invalid file type for {file.filename}")
 
     if uploaded_files:
@@ -84,6 +93,7 @@ def upload_file():
             message += f", but with some errors: {'; '.join(errors)}"
         return jsonify({"message": message, "filenames": uploaded_files}), 200
     else:
+        logger.error(f"No valid files were uploaded. Errors: {'; '.join(errors)}")
         return jsonify({"error": f"No valid files were uploaded. Errors: {'; '.join(errors)}"}), 400
 
 @app.route('/query', methods=['POST'])
@@ -154,6 +164,7 @@ def home():
     return render_template('index.html')
 
 if __name__ == '__main__':
+    logger.info("Starting server")
     port = int(os.environ.get('PORT', 8080))
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     app.run(port=port, debug=True)

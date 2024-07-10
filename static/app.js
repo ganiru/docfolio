@@ -77,7 +77,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const queryInput = document.getElementById("queryInput");
   const sendQuery = document.getElementById("sendQuery");
 
-  const apiURL = window.location.origin; //`${apiHost}:${apiPort}`;
+  const apiURL = window.location.origin;
 
   let currentDocuments = [];
 
