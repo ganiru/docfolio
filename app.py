@@ -74,8 +74,12 @@ def upload_file():
                 logger.info(f"filename: {filename}")
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 logger.info(f"file_path {file_path}")
-                file.save(file_path)
-                logger.info(f"File saved to {file_path}")
+                try:
+                    file.save(file_path)
+                    logger.info(f"File saved to {file_path}")
+                except Exception as e:
+                    logger.error(f"Error saving file {file_path}: {str(e)}")
+                    errors.append(f"Error saving file {file_path}: {str(e)}")
 
                 loader = PyMuPDFLoader(file_path)
                 documents = loader.load()
@@ -186,4 +190,5 @@ if __name__ == '__main__':
     logger.info("Starting server")
     port = int(os.environ.get('PORT', 8080))
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    logger.info("UPLOAD_FOLDER seet")
     app.run(port=port, debug=True)
