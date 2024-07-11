@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", function () {
               "flex justify-between items-center p-2 bg-gray-200 rounded mb-2 cursor-pointer";
             docElement.innerHTML = `
                 <span style="cursor: pointer" title='${doc}'>${filename}</span>
-                <button class="delete-doc" data-filename="${doc}"><i class="material-icons">delete</i></button>
+                <button class="delete-doc material-icons" data-filename="${doc}">delete</button>
               `;
             docElement
               .querySelector(".delete-doc")
@@ -183,7 +183,11 @@ document.addEventListener("DOMContentLoaded", function () {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ query: query, filenames: currentDocuments }),
+        body: JSON.stringify({
+          query: query,
+          filenames: currentDocuments,
+          use_faiss: false,
+        }),
       })
         .then((response) => {
           const reader = response.body.getReader();

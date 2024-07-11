@@ -12,3 +12,4 @@ gunicorn
 werkzeug
 redis
 celery
+faiss-cpu
