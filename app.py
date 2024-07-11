@@ -1,7 +1,7 @@
 import os
 import shutil
 import unicodedata
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import chromadb
@@ -15,6 +15,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import logging
+import uuid
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ logger.setLevel(logging.INFO)
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, template_folder='templates')
+app.secret_key = os.urandom(24)  # Set a secret key for sessions
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 UPLOAD_FOLDER = 'uploads'
@@ -58,6 +60,14 @@ def upload_file():
     # Make sure the upload folder exists
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+    # Generate a unique session ID if it doesn't exist
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
+    
+    # Initialize the session's file list if it doesn't exist
+    if 'files' not in session:
+        session['files'] = []
+
     for file in files:
         if file.filename == '':
             continue
@@ -67,33 +77,25 @@ def upload_file():
 
         if file and allowed_file(file.filename):
             try:
-                logger.info(f"Original filename: {file.filename}")
-                logger.info(f"Filename type: {type(file.filename)}")
-                try:
-                    filename = sanitize_filename(file.filename)
-                    logger.info(f"Sanitized filename: {filename}")
-                except Exception as e:
-                    logger.error(f"Error sanitizing filename: {str(e)}")
-                logger.info(f"filename: {filename}")
+                filename = sanitize_filename(file.filename)
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                logger.info(f"file_path {file_path}")
-                try:
-                    file.save(file_path)
-                    logger.info(f"File saved to {file_path}")
-                except Exception as e:
-                    logger.error(f"Error saving file {file_path}: {str(e)}")
-                    errors.append(f"Error saving file {file_path}: {str(e)}")
+                file.save(file_path)
 
                 loader = PyMuPDFLoader(file_path)
                 documents = loader.load()
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
                 texts = text_splitter.split_documents(documents)
-                print(f"Saving {len(texts)} chunks from the PDF into Chroma")
-                Chroma.from_documents(texts, embeddings, collection_name=filename)
-                print(f"Loaded {len(texts)} chunks into Chroma")
-                logger.info(f"Saved {len(texts)} chunks into Chroma")
-
+                
+                # Use session-specific collection name
+                collection_name = f"{session['session_id']}_{filename}"
+                Chroma.from_documents(texts, embeddings, collection_name=collection_name)
+                
+                session['files'].append(filename)
+                session.modified = True
                 uploaded_files.append(filename)
+
+                # Remove the file after processing
+                os.remove(file_path)
             except Exception as e:
                 logger.error(f"Error processing {filename}: {str(e)}")
                 errors.append(f"Error processing {filename}: {str(e)}")
@@ -103,9 +105,6 @@ def upload_file():
 
     if uploaded_files:
         message = "Files uploaded successfully"
-        print(message)
-        # delete the file from the server after loading it into Chroma
-        os.remove(file_path)
         if errors:
             message += f", but with some errors: {'; '.join(errors)}"
         return jsonify({"message": message, "filenames": uploaded_files}), 200
@@ -125,7 +124,8 @@ def query():
     def generate():
         combined_retriever = []
         for filename in filenames:
-            vectorstore = Chroma(collection_name=filename, embedding_function=embeddings)
+            collection_name = f"{session['session_id']}_{filename}"
+            vectorstore = Chroma(collection_name=collection_name, embedding_function=embeddings)
             combined_retriever.extend(vectorstore.as_retriever().invoke(query))
 
         template = """Use the following pieces of context to answer the question at the end. 
@@ -154,13 +154,17 @@ def get_documents():
     if request.method == 'OPTIONS':
         return handle_options_request()
     
-    collections = chroma_client.list_collections()
-    return jsonify({"documents": [collection.name for collection in collections]}), 200
+    # Return only the files associated with the current session
+    return jsonify({"documents": session.get('files', [])}), 200
 
 @app.route('/delete/<filename>', methods=['DELETE'])
 def delete_document(filename):
     try:
-        chroma_client.delete_collection(filename)            
+        collection_name = f"{session['session_id']}_{filename}"
+        chroma_client.delete_collection(collection_name)
+        if filename in session['files']:
+            session['files'].remove(filename)
+            session.modified = True
         return jsonify({"message": f"Document {filename} deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": f"Failed to delete document: {str(e)}"}), 400
@@ -180,20 +184,14 @@ def handle_options_request():
 def home():
     return render_template('index.html')
 
-
 def sanitize_filename(filename):
-    # Normalize the filename to decomposed form
     filename = unicodedata.normalize('NFKD', filename)
-    # Remove non-ASCII characters
     filename = filename.encode('ASCII', 'ignore').decode('ASCII')
-    # Use secure_filename to handle the rest
     return secure_filename(filename)
 
 if __name__ == '__main__':
     logger.info("Starting server")
     port = int(os.environ.get('PORT', 8080))
-    
-    # Ensure the upload folder exists
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     logger.info("UPLOAD_FOLDER set")
     app.run(port=port, debug=True)
