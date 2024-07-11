@@ -10,3 +10,5 @@ PyMuPDF
 python-dotenv
 gunicorn
 werkzeug
+redis
+celery

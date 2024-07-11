@@ -1,4 +1,6 @@
 import os
+import random
+import re
 import shutil
 import unicodedata
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session
@@ -85,9 +87,11 @@ def upload_file():
                 documents = loader.load()
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
                 texts = text_splitter.split_documents(documents)
-                
+                print("before collectionname: ", f"{session['session_id']}_{filename}")
                 # Use session-specific collection name
-                collection_name = f"{session['session_id']}_{filename}"
+                collection_name = fix_collection_name(f"{session['session_id']}_{filename}") # f"{session['session_id']}_{filename}"
+                print("after collectionname: ", collection_name)
+                
                 Chroma.from_documents(texts, embeddings, collection_name=collection_name)
                 
                 session['files'].append(filename)
@@ -124,7 +128,8 @@ def query():
     def generate():
         combined_retriever = []
         for filename in filenames:
-            collection_name = f"{session['session_id']}_{filename}"
+            collection_name = fix_collection_name(f"{session['session_id']}_{filename}") # f"{session['session_id']}_{filename}"
+
             vectorstore = Chroma(collection_name=collection_name, embedding_function=embeddings)
             combined_retriever.extend(vectorstore.as_retriever().invoke(query))
 
@@ -159,8 +164,9 @@ def get_documents():
 
 @app.route('/delete/<filename>', methods=['DELETE'])
 def delete_document(filename):
+    print(session['session_id'])
     try:
-        collection_name = f"{session['session_id']}_{filename}"
+        collection_name = fix_collection_name(f"{session['session_id']}_{filename}")
         chroma_client.delete_collection(collection_name)
         if filename in session['files']:
             session['files'].remove(filename)
@@ -179,6 +185,21 @@ def handle_options_request():
     }
     response.headers.extend(headers)
     return response
+
+# create a method that validates the collection name and adjusts as necessary
+def fix_collection_name(word):
+    fixedCollectionName = word
+    if len(word) > 62:
+        fixedCollectionName = word[:62]
+    
+    if not fixedCollectionName[-1].isalnum():
+        fixedCollectionName = fixedCollectionName[:-1] + str(random.randint(0, 9))
+    
+    # if it contains 2 or more consecutive periods (..), replace it with a single one
+    fixedCollectionName = re.sub(r'\.\.+', '.', fixedCollectionName)
+    print(word, "****", fixedCollectionName)
+    return fixedCollectionName
+    
 
 @app.route('/')
 def home():
