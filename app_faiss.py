@@ -9,7 +9,6 @@ from werkzeug.utils import secure_filename
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -38,7 +37,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['FAISS_INDEX_FOLDER'] = FAISS_INDEX_FOLDER
 
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L3-v2")
-# embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
 llm = ChatGroq(
     groq_api_key=os.getenv('GROQ_API_KEY'),
     model_name="mixtral-8x7b-32768",
