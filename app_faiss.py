@@ -6,11 +6,11 @@ import unicodedata
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-import chromadb
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
@@ -19,9 +19,6 @@ from dotenv import load_dotenv
 import logging
 import uuid
 import datetime
-import pickle
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -35,13 +32,13 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
+FAISS_INDEX_FOLDER = 'faiss_indexes'
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-chroma_client = chromadb.Client()
+app.config['FAISS_INDEX_FOLDER'] = FAISS_INDEX_FOLDER
 
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L3-v2")
-
+# embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 llm = ChatGroq(
     groq_api_key=os.getenv('GROQ_API_KEY'),
     model_name="mixtral-8x7b-32768",
@@ -54,6 +51,7 @@ def allowed_file(filename):
 
 @app.route('/upload', methods=['POST', 'OPTIONS'])
 def upload_file():
+    print("Uploading file and creating FAISS index...")
     if request.method == 'OPTIONS':
         return handle_options_request()
     
@@ -65,6 +63,7 @@ def upload_file():
     errors = []
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['FAISS_INDEX_FOLDER'], exist_ok=True)
 
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
@@ -89,15 +88,16 @@ def upload_file():
                 documents = loader.load()
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=150)
                 texts = text_splitter.split_documents(documents)
-                print(datetime.datetime.now(), "=>>before collectionname: ", f"{session['session_id']}_{filename}")
-                collection_name = fix_collection_name(f"{session['session_id']}_{filename}")
-                print(datetime.datetime.now(), ">>after collectionname: ", collection_name)
                 
-                print(datetime.datetime.now(), ">>Chroma.from_documents")
+                print(datetime.datetime.now(), ">>FAISS.from_documents started...")
                 start = datetime.datetime.now()
-                Chroma.from_documents(texts, embeddings, collection_name=collection_name)
+                faiss_index = FAISS.from_documents(texts, embeddings)
                 end = datetime.datetime.now()
-                print(datetime.datetime.now(), ">>Chroma.from_documents duration:", end - start)
+                print(datetime.datetime.now(), ">>FAISS.from_documents duration:", end - start)
+                
+                index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
+                faiss_index.save_local(index_path)
+                
                 session['files'].append(filename)
                 session.modified = True
                 uploaded_files.append(filename)
@@ -131,12 +131,13 @@ def query():
         return jsonify({"error": "Missing query or filenames"}), 400
     
     def generate():
-        combined_retriever = []
+        combined_results = []
         for filename in filenames:
-            collection_name = fix_collection_name(f"{session['session_id']}_{filename}")
-            vectorstore = Chroma(collection_name=collection_name, embedding_function=embeddings)
-            
-            combined_retriever.extend(vectorstore.as_retriever().invoke(query))
+            index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
+            if os.path.exists(index_path):
+                faiss_index = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+                results = faiss_index.similarity_search(query, k=2)
+                combined_results.extend(results)
 
         template = """Use the following pieces of context to answer the question at the end. 
         If you don't know the answer, just say that you don't know, don't try to make up an answer.
@@ -148,7 +149,7 @@ def query():
         prompt = ChatPromptTemplate.from_template(template)
 
         chain = (
-            {"context": lambda _: combined_retriever, "question": RunnablePassthrough()}
+            {"context": lambda _: combined_results, "question": RunnablePassthrough()}
             | prompt
             | llm
             | StrOutputParser()
@@ -170,16 +171,29 @@ def get_documents():
 def delete_document(filename):
     print(session['session_id'])
     try:
-        # Delete Chroma collection
-        collection_name = fix_collection_name(f"{session['session_id']}_{filename}")
-        chroma_client.delete_collection(collection_name)
-       
+        # Delete FAISS index
+        index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
+        if os.path.exists(index_path):
+            if os.path.isdir(index_path):
+                shutil.rmtree(index_path)
+            else:
+                os.remove(index_path)
+            logger.info(f"Deleted FAISS index at {index_path}")
+        else:
+            logger.warning(f"FAISS index not found at {index_path}")
+        
         if filename in session['files']:
             session['files'].remove(filename)
             session.modified = True
+            logger.info(f"Removed {filename} from session files")
+        
         return jsonify({"message": f"Document {filename} deleted successfully"}), 200
+    except PermissionError as pe:
+        logger.error(f"Permission error while deleting {filename}: {str(pe)}")
+        return jsonify({"error": f"Permission denied when deleting {filename}. Please check file permissions."}), 403
     except Exception as e:
-        return jsonify({"error": f"Failed to delete document: {str(e)}"}), 400
+        logger.error(f"Error deleting {filename}: {str(e)}")
+        return jsonify({"error": f"Failed to delete document {filename}: {str(e)}"}), 500
 
 def handle_options_request():
     response = app.make_default_options_response()
@@ -191,18 +205,6 @@ def handle_options_request():
     }
     response.headers.extend(headers)
     return response
-
-def fix_collection_name(word):
-    fixedCollectionName = word
-    if len(word) > 62:
-        fixedCollectionName = word[:62]
-    
-    if not fixedCollectionName[-1].isalnum():
-        fixedCollectionName = fixedCollectionName[:-1] + str(random.randint(0, 9))
-    
-    fixedCollectionName = re.sub(r'\.\.+', '.', fixedCollectionName)
-    print(word, "****", fixedCollectionName)
-    return fixedCollectionName
 
 @app.route('/')
 def home():
@@ -217,5 +219,6 @@ if __name__ == '__main__':
     logger.info("Starting server")
     port = int(os.environ.get('PORT', 8080))
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    logger.info("UPLOAD_FOLDER set")
+    os.makedirs(app.config['FAISS_INDEX_FOLDER'], exist_ok=True)
+    logger.info("UPLOAD_FOLDER and FAISS_INDEX_FOLDER set")
     app.run(port=port, debug=True)

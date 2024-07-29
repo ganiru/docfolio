@@ -17,7 +17,7 @@ COPY . .
 EXPOSE 8080
 
 # Set environment variables
-ENV FLASK_APP=app.py
+ENV FLASK_APP=app_faiss.py
 ENV FLASK_RUN_HOST=0.0.0.0
 
 # Run the Flask application
