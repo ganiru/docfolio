@@ -6,7 +6,7 @@ import unicodedata
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, UnstructuredExcelLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -30,7 +30,7 @@ app.secret_key = os.urandom(24)  # Set a secret key for sessions
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'xlsx', 'txt'}
 FAISS_INDEX_FOLDER = 'faiss_indexes'
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -46,7 +46,21 @@ llm = ChatGroq(
 )
 
 def allowed_file(filename):
+    print("Filename is ", filename)
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_loader(file_path):
+    file_extension = file_path.split('.')[-1].lower()
+    if file_extension == 'pdf':
+        return PyMuPDFLoader(file_path)
+    elif file_extension == 'docx':
+        return Docx2txtLoader(file_path)
+    elif file_extension == 'xlsx':
+        return UnstructuredExcelLoader(file_path)
+    elif file_extension == 'txt':
+        return TextLoader(file_path)
+    else:
+        raise ValueError(f"Unsupported file type: {file_extension}")
 
 @app.route('/upload', methods=['POST', 'OPTIONS'])
 def upload_file():
@@ -76,15 +90,17 @@ def upload_file():
         
         if not isinstance(file.filename, str):
             logger.error(f"Unexpected filename type: {type(file.filename)}")
-
+        print("**((**Filename is ", file.filename)
         if file and allowed_file(file.filename):
             try:
                 filename = sanitize_filename(file.filename)
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(file_path)
 
-                loader = PyMuPDFLoader(file_path)
+                print(datetime.datetime.now(), ">>getting loader...")
+                loader = get_loader(file_path)
                 documents = loader.load()
+                print(datetime.datetime.now(), ">>loader loaded...")
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=150)
                 texts = text_splitter.split_documents(documents)
                 

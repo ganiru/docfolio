@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 uploads/
 /node_modules
+/faiss_indexes
+/milvus_data
+/milvus_lite_data

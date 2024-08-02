@@ -13,3 +13,5 @@ werkzeug
 redis
 celery
 faiss-cpu
+python-docx
+openpyxl
