@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Doc Folio - Chat with your documents - DevObi</title>
+    <title>DocFolio - Chat with your documents - DevObi</title>
     <link href="{{ url_for('static', filename='styles.css')}}" rel="stylesheet">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico')}}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -43,7 +43,7 @@
             
             <!-- Right column -->
             <div class="w-full md:w-2/3 bg-gray-100 p-4 rounded-lg">
-                <h5 style="text-align: center;" id="selectedDocument">Select documents to chat with</h5>
+                <h5 style="text-align: center;" id="selectedDocument">Select documents to query</h5>
                 <div id="chatWindow" class="h-96 overflow-y-auto mb-4 p-4 bg-white rounded-lg"></div>
                 <div class="flex">
                     <input type="text" id="queryInput" placeholder="Type your query here..." class="flex-grow p-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-gray-500">

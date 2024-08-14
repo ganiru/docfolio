@@ -32,16 +32,21 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'xlsx', 'txt'}
 FAISS_INDEX_FOLDER = 'faiss_indexes'
+EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+LLM_MODEL = "llama3-8b-8192" # "mixtral-8x7b-32768"
+TEMPERATURE = 0.2
+CHUNK_SIZE = 1500
+CHUNK_OVERLAP = 200
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['FAISS_INDEX_FOLDER'] = FAISS_INDEX_FOLDER
 
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L3-v2")
+embeddings = HuggingFaceEmbeddings(model_name=EMBEDDINGS_MODEL)
 
 llm = ChatGroq(
     groq_api_key=os.getenv('GROQ_API_KEY'),
-    model_name="mixtral-8x7b-32768",
-    temperature=0.4,
+    model_name=LLM_MODEL,
+    temperature=TEMPERATURE,
     streaming=True,
 )
 
@@ -101,7 +106,7 @@ def upload_file():
                 loader = get_loader(file_path)
                 documents = loader.load()
                 print(datetime.datetime.now(), ">>loader loaded...")
-                text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=150)
+                text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
                 texts = text_splitter.split_documents(documents)
                 
                 print(datetime.datetime.now(), ">>FAISS.from_documents started...")
