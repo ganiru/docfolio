@@ -47,7 +47,7 @@ llm = ChatGroq(
     groq_api_key=os.getenv('GROQ_API_KEY'),
     model_name=LLM_MODEL,
     temperature=TEMPERATURE,
-    streaming=True,
+    streaming=False,
 )
 
 def allowed_file(filename):
@@ -150,35 +150,33 @@ def query():
     if not query or not filenames:
         return jsonify({"error": "Missing query or filenames"}), 400
     
-    def generate():
-        combined_results = []
-        for filename in filenames:
-            index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
-            if os.path.exists(index_path):
-                faiss_index = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-                results = faiss_index.similarity_search(query, k=2)
-                combined_results.extend(results)
+    combined_results = []
+    for filename in filenames:
+        index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
+        if os.path.exists(index_path):
+            faiss_index = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+            results = faiss_index.similarity_search(query, k=2)
+            combined_results.extend(results)
 
-        template = """Use the following pieces of context to answer the question at the end. 
-        If you don't know the answer, just say that you don't know, don't try to make up an answer.
+    template = """Use the following pieces of context to answer the question at the end. 
+    If you don't know the answer, just say that you don't know, don't try to make up an answer.
+    If the question requests a table or a list, generate the response as HTML table or list as necessary.
+    If an HTML table is returned, give it a 1 pixel border and the header should have a gray background color and white text.
+    {context}
 
-        {context}
+    Question: {question}
+    Answer:"""
+    prompt = ChatPromptTemplate.from_template(template)
 
-        Question: {question}
-        Answer:"""
-        prompt = ChatPromptTemplate.from_template(template)
+    chain = (
+        {"context": lambda _: combined_results, "question": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
 
-        chain = (
-            {"context": lambda _: combined_results, "question": RunnablePassthrough()}
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-
-        for chunk in chain.stream(query):
-            yield chunk
-
-    return Response(stream_with_context(generate()), content_type='text/plain')
+    response = chain.invoke(query)
+    return jsonify({"response": response})
 
 @app.route('/documents', methods=['GET', 'OPTIONS'])
 def get_documents():
@@ -214,6 +212,10 @@ def delete_document(filename):
     except Exception as e:
         logger.error(f"Error deleting {filename}: {str(e)}")
         return jsonify({"error": f"Failed to delete document {filename}: {str(e)}"}), 500
+
+@app.route('/test', methods=['GET'])
+def test():
+    return jsonify({"message": "<table style='border:solid 1px gray' border=1><tr style='background-color:gray; color:white'><th>head1</th><th>h2</th></tr><tr><td>some sample</td><td>Some thing else</td></tr></table>"}), 200
 
 def handle_options_request():
     response = app.make_default_options_response()

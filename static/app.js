@@ -173,10 +173,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const responseElement = document.createElement("div");
       responseElement.className = "mb-2";
-      responseElement.innerHTML = `<p style='white-space: pre-wrap;'>Bot: </p>`;
+      responseElement.innerHTML = `<p><b>Bot:</b> <span class="bot-response"></span></p>`;
       chatWindow.appendChild(responseElement);
 
-      const botResponse = responseElement.querySelector("p");
+      const botResponse = responseElement.querySelector(".bot-response");
+
+      // Show loading indicator
+      const loadingIndicator = document.createElement("div");
+      loadingIndicator.className = "loading-indicator";
+      loadingIndicator.textContent = "Thinking...";
+      botResponse.appendChild(loadingIndicator);
 
       fetch(`${apiURL}/query`, {
         method: "POST",
@@ -190,26 +196,29 @@ document.addEventListener("DOMContentLoaded", function () {
         }),
       })
         .then((response) => {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-
-          function readStream() {
-            return reader.read().then(({ done, value }) => {
-              if (done) {
-                return;
-              }
-              const chunk = decoder.decode(value, { stream: true });
-              botResponse.textContent += chunk;
-              chatWindow.scrollTop = chatWindow.scrollHeight;
-              return readStream();
-            });
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
+          return response.json();
+        })
+        .then((data) => {
+          // Remove loading indicator
+          loadingIndicator.remove();
 
-          return readStream();
+          // Display the response
+          const sanitizedHTML = DOMPurify.sanitize(data.response, {
+            ALLOW_UNKNOWN_PROTOCOLS: true,
+            ADD_TAGS: ["table", "thead", "tbody", "tr", "th", "td"],
+            ADD_ATTR: ["colspan", "rowspan"],
+          });
+          botResponse.innerHTML = sanitizedHTML;
+
+          chatWindow.scrollTop = chatWindow.scrollHeight;
         })
         .catch((error) => {
           console.error("Error:", error);
-          botResponse.textContent +=
+          loadingIndicator.remove();
+          botResponse.textContent =
             "An error occurred while fetching the response.";
         });
     }

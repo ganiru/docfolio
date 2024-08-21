@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DocFolio - Chat with your documents - DevObi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.3/purify.min.js"></script>
     <link href="{{ url_for('static', filename='styles.css')}}" rel="stylesheet">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico')}}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -40,13 +41,14 @@
                 <div id="documentsHeader" class="text-sm mt-5 text-center"></div>
                 <div id="documentList" class="space-y-2"></div>
             </div>
-            
+
             <!-- Right column -->
             <div class="w-full md:w-2/3 bg-gray-100 p-4 rounded-lg">
                 <h5 style="text-align: center;" id="selectedDocument">Select documents to query</h5>
                 <div id="chatWindow" class="h-96 overflow-y-auto mb-4 p-4 bg-white rounded-lg"></div>
                 <div class="flex">
-                    <input type="text" id="queryInput" placeholder="Type your query here..." class="flex-grow p-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    <input type="text" id="queryInput" placeholder="Type your query here..."
+                     class="flex-grow p-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-gray-500">
                     <button id="sendQuery" class="bg-gray-600 text-white px-4 py-2 rounded-r-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500">Send</button>
                 </div>
             </div>
@@ -55,6 +57,7 @@
     <footer class="mt-auto text-white-50 text-center">
         <p>2024. &copy;DevObi LLC. All Rights Reserved. info@devobi.com </p>
       </footer>
-    <script src="/static/app.js"></script>
+      <link rel="icon" href="{{ url_for('static', filename='favicon.ico')}}">
+    <script src="{{ url_for('static', filename='app.js')}}"></script>
 </body>
 </html>
