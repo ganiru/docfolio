@@ -173,7 +173,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const responseElement = document.createElement("div");
       responseElement.className = "mb-2";
-      responseElement.innerHTML = `<p><b>Bot:</b> <span class="bot-response"></span></p>`;
+      responseElement.innerHTML = `<p><b>Bot:</b> <span class="bot-response" style="white-space: pre-wrap;"></span></p>`;
       chatWindow.appendChild(responseElement);
 
       const botResponse = responseElement.querySelector(".bot-response");
