@@ -1,6 +1,5 @@
 Flask
 flask-cors
-chromadb
 langchain
 langchain-community
 langchain-core
@@ -8,11 +7,9 @@ langchain-groq
 langchain-huggingface
 PyMuPDF
 python-dotenv
-gunicorn
 werkzeug
-redis
 celery
-faiss-cpu
 python-docx
 openpyxl
 docx2txt
+supabase
