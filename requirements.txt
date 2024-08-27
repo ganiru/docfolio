@@ -13,3 +13,4 @@ python-docx
 openpyxl
 docx2txt
 supabase
+langchain_openai
