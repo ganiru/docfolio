@@ -1,8 +1,9 @@
 import os
 import shutil
 import unicodedata
-from flask import Flask, Response, render_template, request, jsonify, session, stream_with_context
+from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
+import requests
 from werkzeug.utils import secure_filename
 from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, UnstructuredExcelLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -30,7 +31,7 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'xlsx', 'txt'}
 FAISS_INDEX_FOLDER = 'faiss_indexes'
-EMBEDDINGS_MODEL = "sentence-transformers/paraphrase-MiniLM-L3-v2"
+EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 LLM_MODEL = "llama3-8b-8192" # "mixtral-8x7b-32768"
 TEMPERATURE = 0.2
 CHUNK_SIZE = 1500
@@ -45,7 +46,7 @@ llm = ChatGroq(
     groq_api_key=os.getenv('GROQ_API_KEY'),
     model_name=LLM_MODEL,
     temperature=TEMPERATURE,
-    streaming=True,
+    streaming=False,
 )
 
 def allowed_file(filename):
@@ -67,7 +68,7 @@ def get_loader(file_path):
 
 @app.route('/upload', methods=['POST', 'OPTIONS'])
 def upload_file():
-    print("Uploading file and creating FAISS index...")
+    print("Uploading...")
     if request.method == 'OPTIONS':
         return handle_options_request()
     
@@ -93,29 +94,34 @@ def upload_file():
         
         if not isinstance(file.filename, str):
             logger.error(f"Unexpected filename type: {type(file.filename)}")
-        print("**((**Filename is ", file.filename)
+
+        print("** THE Filename is ", file.filename)
+        status = ''
         if file and allowed_file(file.filename):
             try:
                 filename = sanitize_filename(file.filename)
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 file.save(file_path)
 
-                print(datetime.datetime.now(), ">>getting loader...")
-                loader = get_loader(file_path)
-                documents = loader.load()
-                print(datetime.datetime.now(), ">>loader loaded...")
-                text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
-                texts = text_splitter.split_documents(documents)
-                
-                print(datetime.datetime.now(), ">>FAISS.from_documents started. Size of texts:", len(texts))
-                start = datetime.datetime.now()
-                faiss_index = FAISS.from_documents(texts, embeddings)
-                end = datetime.datetime.now()
-                print(datetime.datetime.now(), ">>FAISS.from_documents duration:", end - start)
-                
-                index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
-                faiss_index.save_local(index_path)
-                
+                print(">> Sanitized filename ", filename)
+                API_URL = "https://flowiseai-railway-production-cd23.up.railway.app/api/v1/vector/upsert/729a2fee-cf8a-4ee5-9749-22c66972a9eb"
+
+                print("opening the file...")
+                # use form data to upload files
+                form_data = {
+                    "files": (file_path, open(file_path, 'rb'),'application/pdf')
+                }
+                print("file opened")
+
+                print(">> Sanitized filename ", filename)
+                body_data = {
+                    "returnSourceDocuments": False,
+               #     "supabaseApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNld3djcWtxb2F2cXJ1Z3BnY295Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjQzNjM1OTYsImV4cCI6MjAzOTkzOTU5Nn0.SgfiCTqxfwdPx8P-scV4QpAINQLEJgXOFXpgCzh4NNw",
+              #      "supabaseProjUrl": "https://cewwcqkqoavqrugpgcoy.supabase.co",
+             #       "tableName": "docfolio_documents",
+                }
+                response = requests.post(API_URL, data=body_data, files=form_data)
+                status = response.json()
                 session['files'].append(filename)
                 session.modified = True
                 uploaded_files.append(filename)
@@ -126,12 +132,14 @@ def upload_file():
             except Exception as e:
                 logger.error(f"Error processing {filename}: {str(e)}")
                 errors.append(f"Error processing {filename}: {str(e)}")
+                print(f"Error uploading and processing {e}")
         else:
             logger.error(f"Invalid file type for {file.filename}")
             errors.append(f"Invalid file type for {file.filename}")
 
     if uploaded_files:
         message = "Files uploaded successfully"
+        print(status)
         if errors:
             message += f", but with some errors: {'; '.join(errors)}"
         return jsonify({"message": message, "filenames": uploaded_files}), 200
@@ -141,76 +149,16 @@ def upload_file():
 
 @app.route('/query', methods=['POST'])
 def query():
-    data = request.json
-    query = data.get('query')
-    filenames = data.get('filenames')
-    
-    if not query or not filenames:
-        return jsonify({"error": "Missing query or filenames"}), 400
-    
-    def generate():
-        combined_results = []
-        for filename in filenames:
-            index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
-            if os.path.exists(index_path):
-                faiss_index = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-                results = faiss_index.similarity_search(query, k=2)
-                combined_results.extend(results)
-        print(datetime.datetime.now(), ">>combined_results:", combined_results)
-        template = """Use the following pieces of context to answer the question at the end. 
-        If you don't know the answer, just say that you don't know, don't try to make up an answer.
+    try:
+        API_URL = "https://flowiseai-railway-production-cd23.up.railway.app/api/v1/prediction/729a2fee-cf8a-4ee5-9749-22c66972a9eb"
+        question = {"question": request.json['query']}
+        response = requests.post(API_URL, json=question)
+        resp = response.json()
 
-        {context}
-
-        Question: {question}
-        Answer:"""
-        prompt = ChatPromptTemplate.from_template(template)
-
-        chain = (
-            {"context": lambda _: combined_results, "question": RunnablePassthrough()}
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
-
-        for chunk in chain.stream(query):
-            yield chunk
-
-    return Response(stream_with_context(generate()), content_type='text/plain')
-
-def query_no_streaming():
-    data = request.json
-    query = data.get('query')
-    filenames = data.get('filenames')
-    
-    if not query or not filenames:
-        return jsonify({"error": "Missing query or filenames"}), 400
-    
-    combined_results = []
-    for filename in filenames:
-        index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
-        if os.path.exists(index_path):
-            faiss_index = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-            results = faiss_index.similarity_search(query, k=2)
-            combined_results.extend(results)
-
-    template = """Use the following pieces of context to answer the question at the end. 
-    If you don't know the answer, just say that you don't know, don't try to make up an answer.
-     {context}
-
-    Question: {question}
-    Answer:"""
-    prompt = ChatPromptTemplate.from_template(template)
-
-    chain = (
-        {"context": lambda _: combined_results, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-
-    response = chain.invoke(query)
-    return jsonify({"response": response})
+        print(resp['text'])
+        return jsonify({"response": response.json()['text']}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/documents', methods=['GET', 'OPTIONS'])
 def get_documents():

@@ -4,7 +4,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const chatWindow = document.getElementById("chatWindow");
   const queryInput = document.getElementById("queryInput");
   const sendQuery = document.getElementById("sendQuery");
-
   const apiURL = window.location.origin;
 
   let currentDocuments = [];
@@ -30,11 +29,11 @@ document.addEventListener("DOMContentLoaded", function () {
           document.getElementById("documentsHeader").style.display = "block";
 
           let documentLabel = "";
-          if (data.documents.length === 1) {
+          if (data.documents.length > 1) {
+            documentLabel = `${data.documents.length} documents.`; // Select one or more to start chatting`;
+          } /* else {
             documentLabel = "Select the document to start chatting";
-          } else {
-            documentLabel = `${data.documents.length} documents. Select one or more to start chatting`;
-          }
+            } */
           document.getElementById("documentsHeader").innerText = documentLabel;
 
           data.documents.forEach((doc) => {
@@ -53,7 +52,7 @@ document.addEventListener("DOMContentLoaded", function () {
             docElement
               .querySelector(".delete-doc")
               .addEventListener("click", deleteDocument);
-            docElement.addEventListener("click", () => toggleDocument(doc));
+            //docElement.addEventListener("click", () => toggleDocument(doc));
             documentList.appendChild(docElement);
           });
         }
@@ -73,7 +72,7 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log(data.message);
         updateDocumentList();
         currentDocuments = currentDocuments.filter((doc) => doc !== filename);
-        updateSelectedDocuments();
+        // updateSelectedDocuments();
       })
       .catch((error) => console.error("Error:", error));
   }
@@ -85,7 +84,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
       currentDocuments.push(filename);
     }
-    updateSelectedDocuments();
+    //updateSelectedDocuments();
   }
 
   function updateSelectedDocuments() {
@@ -116,6 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
       for (let i = 0; i < files.length; i++) {
         formData.append("file", files[i]);
       }
+
       fetch(`${apiURL}/upload`, {
         method: "POST",
         body: formData,
@@ -157,72 +157,72 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   function sendMessage() {
-    if (currentDocuments.length === 0) {
+    /*if (currentDocuments.length === 0) {
       alert("Please select at least one document first.");
       return;
     }
-
+*/
     const query = queryInput.value;
-    if (query) {
-      const messageElement = document.createElement("div");
-      messageElement.className = "mb-2";
-      messageElement.innerHTML = `<p class="font-bold">You: ${query}</p>`;
-      chatWindow.appendChild(messageElement);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-      queryInput.value = "";
-
-      const responseElement = document.createElement("div");
-      responseElement.className = "mb-2";
-      responseElement.innerHTML = `<p><b>Bot:</b> <span class="bot-response" style="white-space: pre-wrap;"></span></p>`;
-      chatWindow.appendChild(responseElement);
-
-      const botResponse = responseElement.querySelector(".bot-response");
-
-      // Show loading indicator
-      const loadingIndicator = document.createElement("div");
-      loadingIndicator.className = "loading-indicator";
-      loadingIndicator.textContent = "Thinking...";
-      botResponse.appendChild(loadingIndicator);
-
-      fetch(`${apiURL}/query`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: query,
-          filenames: currentDocuments,
-          use_faiss: false,
-        }),
-      })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then((data) => {
-          // Remove loading indicator
-          loadingIndicator.remove();
-
-          // Display the response
-          const sanitizedHTML = DOMPurify.sanitize(data.response, {
-            ALLOW_UNKNOWN_PROTOCOLS: true,
-            ADD_TAGS: ["table", "thead", "tbody", "tr", "th", "td"],
-            ADD_ATTR: ["colspan", "rowspan"],
-          });
-          botResponse.innerHTML = sanitizedHTML;
-
-          chatWindow.scrollTop = chatWindow.scrollHeight;
-        })
-        .catch((error) => {
-          console.error("Error:", error);
-          loadingIndicator.remove();
-          botResponse.textContent =
-            "An error occurred while fetching the response.";
-        });
+    if (query.trim() === "") {
+      alert("Please enter a query.");
+      return;
     }
-  }
+    const messageElement = document.createElement("article");
+    messageElement.className = "mb-2";
+    messageElement.innerHTML = `<p class="font-bold">You: ${query}</p>`;
+    chatWindow.appendChild(messageElement);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    queryInput.value = "";
 
+    const responseElement = document.createElement("article");
+    responseElement.className = "mb-2";
+    responseElement.innerHTML = `<p><b>Bot:</b> <span class="bot-response" style="white-space: pre-wrap;"></span></p>`;
+    chatWindow.appendChild(responseElement);
+
+    const botResponse = responseElement.querySelector(".bot-response");
+
+    // Show loading indicator
+    const loadingIndicator = document.createElement("span");
+    loadingIndicator.className = "loading-indicator";
+    loadingIndicator.textContent = "Thinking...";
+    botResponse.appendChild(loadingIndicator);
+
+    // Send request to server
+    fetch("/query", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: query,
+        filenames: currentDocuments,
+      }),
+    })
+      .then((response) => {
+        // clear the 'thinking'
+        loadingIndicator.remove();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        function readStream() {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              return;
+            }
+            const chunk = decoder.decode(value);
+            botResponse.innerHTML += chunk;
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            readStream();
+          });
+        }
+
+        readStream();
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        aiMessageDiv.innerHTML = `Error: ${error.message}`;
+        aiMessageDiv.classList.add("error-message");
+      });
+  }
   updateDocumentList();
 });
