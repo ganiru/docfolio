@@ -1,6 +1,7 @@
 import os
 import unicodedata
-from flask import Flask, render_template, request, jsonify, session
+import logging
+from flask import Flask, render_template, request, jsonify, session, Response, stream_with_context
 from flask_cors import CORS
 from langchain_groq import ChatGroq
 from werkzeug.utils import secure_filename
@@ -8,10 +9,8 @@ from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import SupabaseVectorStore
 from dotenv import load_dotenv
-import logging
 from supabase import create_client
 from langchain_openai import OpenAIEmbeddings
-from flask import Response, stream_with_context
 from langchain.callbacks import StreamingStdOutCallbackHandler
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -47,12 +46,10 @@ def set_client_session():
     if 'id' in request.args:
         # Set the user_id in the session
         session['user_id'] = request.args.get('id')
-    print('==> session_id initial', session.get('user_id', 'Not set'))
 
 
 @app.route('/', methods=['GET', 'OPTIONS'])
 def home():
-    print('==> session_id home', session.get('user_id', 'Not set'))
     # return an error if the user_id is not provided
     return render_template('index.html')
 
@@ -99,7 +96,6 @@ def upload_file():
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             
-            print('==> file to be uploaded', filename)
             loader = get_loader(file_path)
             documents = loader.load()
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -135,7 +131,6 @@ def get_documents():
         return handle_options_request()
     
     user_id = session.get('user_id', 'Not set')  # This should be determined based on your authentication system
-    print('==> DOCUMENTS user_id ', user_id)
     
     # Query Supabase for documents belonging to the user
     response = supabase.table("documents").select("metadata->filename").eq("metadata->>user_id", user_id).execute()
