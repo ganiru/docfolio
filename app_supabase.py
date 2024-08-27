@@ -1,14 +1,11 @@
 import os
-import random
-import string
 import unicodedata
-from flask import Flask, g, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 from langchain_groq import ChatGroq
 from werkzeug.utils import secure_filename
 from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, UnstructuredExcelLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import SupabaseVectorStore
 from dotenv import load_dotenv
 import logging
