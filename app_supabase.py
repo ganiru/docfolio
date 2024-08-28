@@ -37,7 +37,7 @@ ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Embeddings model
-EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 embeddings = OpenAIEmbeddings() # HuggingFaceEmbeddings(model_name=EMBEDDINGS_MODEL)
 
 @app.before_request
@@ -94,8 +94,14 @@ def upload_file():
         if file and allowed_file(file.filename):
             filename = sanitize_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
+            logger.info(f"Received file: {file.filename}. Saving to {file_path}")
+            print(f"Received file: {file.filename}. Saving to {file_path}")
             
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            file.save(file_path)
+            logger.info(f"Saved file: {file_path}")
+            print(f"Saved file: {file_path}")
+
             loader = get_loader(file_path)
             documents = loader.load()
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -112,7 +118,9 @@ def upload_file():
                 table_name="documents",
                 query_name="match_documents"
             )
-            
+            logger.info(f"Added documents to vector store: {file_path}")
+            print(f"Added documents to vector store: {file_path}")
+
             os.remove(file_path)
             uploaded_files.append(filename)
         else:
@@ -271,3 +279,4 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     app.run(port=port, debug=True)
+
