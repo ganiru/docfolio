@@ -62,8 +62,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     <div class="flex flex-1 flex-col justify-center">
                         <p class="text-[#0e141b] text-base font-medium leading-normal">${filename}</p>
                         <p class="text-[#4f7396] text-sm font-normal leading-normal">${
-                          doc.created_date ?? "" + file_size
-                            ? ", " + file_size
+                          doc.created_date && file_size
+                            ? doc.created_date + ", " + file_size
                             : ""
                         }</p>
                     </div>
@@ -207,7 +207,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const datenow = Date.now();
 
     messageElement.className = "mb-2";
-    messageElement.innerHTML = `<p><span class="font-bold">You</span> <span class='text-sm' style='color:gray'>${currentTime}</span><div>${query}</div></p>`;
+    messageElement.innerHTML = `<p><span class="font-bold">You</span> <span style='color:gray'>${currentTime}</span><div>${query}</div></p>`;
     chatWindow.appendChild(messageElement);
     chatWindow.scrollTop = chatWindow.scrollHeight;
     queryInput.value = "";
