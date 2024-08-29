@@ -1,7 +1,9 @@
+from datetime import datetime
 import os
+from typing import Dict, List
 import unicodedata
 import logging
-from flask import Flask, render_template, request, jsonify, session, Response, stream_with_context
+from flask import Flask, json, render_template, request, jsonify, session, Response, stream_with_context
 from flask_cors import CORS
 from langchain_groq import ChatGroq
 from werkzeug.utils import secure_filename
@@ -15,6 +17,7 @@ from langchain.callbacks import StreamingStdOutCallbackHandler
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+import anthropic
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -50,8 +53,7 @@ def set_client_session():
 
 @app.route('/', methods=['GET', 'OPTIONS'])
 def home():
-    # return an error if the user_id is not provided
-    return render_template('index.html')
+    return render_template('index2.html')
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -92,6 +94,7 @@ def upload_file():
             continue
         
         if file and allowed_file(file.filename):
+            print(f"File info {file}")
             filename = sanitize_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             logger.info(f"Received file: {file.filename}. Saving to {file_path}")
@@ -99,8 +102,17 @@ def upload_file():
             
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             file.save(file_path)
+            # Save the file size in a variable called file_size
+            file_size = os.path.getsize(file_path)
+            # save the file's metadata to a variable called file_metadata
+            file_metadata = {
+                "filename": filename,
+                "user_id": session.get('user_id', 'Not set'),
+                "created_date": datetime.now().strftime("%m/%d/%Y %I:%M %p"),
+                "file_size": file_size
+            }
             logger.info(f"Saved file: {file_path}")
-            print(f"Saved file: {file_path}")
+            print(f"Saved file: {file_path}. Metadata: {file_metadata}")
 
             loader = get_loader(file_path)
             documents = loader.load()
@@ -108,8 +120,10 @@ def upload_file():
             texts = text_splitter.split_documents(documents)
             
             for text in texts:
-                text.metadata["filename"] = filename
-                text.metadata["user_id"] = session.get('user_id', 'Not set')
+                text.metadata["filename"] = file_metadata['filename']
+                text.metadata["user_id"] = file_metadata['user_id'] # session.get('user_id', 'Not set')
+                text.metadata["created_date"] = file_metadata['created_date'] # datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                text.metadata["file_size"] = file_metadata['file_size'] # file_size
             
             vector_store = SupabaseVectorStore.from_documents(
                 documents=texts,
@@ -122,12 +136,15 @@ def upload_file():
             print(f"Added documents to vector store: {file_path}")
 
             os.remove(file_path)
-            uploaded_files.append(filename)
+            uploaded_files.append(file_metadata)
         else:
             errors.append(f"File type not allowed: {file.filename}")
     
+
     if uploaded_files:
-        return jsonify({"message": f"Files uploaded and processed successfully: {', '.join(uploaded_files)}"}), 200
+        # return a comma delimited string of uploaded filenames from the uploaded_files list
+        uploaded_files_str = ', '.join([file['filename'] for file in uploaded_files])
+        return jsonify({"message": f"Files uploaded and processed successfully: {uploaded_files_str}"}), 200
     elif errors:
         return jsonify({"error": "; ".join(errors)}), 400
     else:
@@ -141,12 +158,32 @@ def get_documents():
     user_id = session.get('user_id', 'Not set')  # This should be determined based on your authentication system
     
     # Query Supabase for documents belonging to the user
-    response = supabase.table("documents").select("metadata->filename").eq("metadata->>user_id", user_id).execute()
+
+    # response = supabase.table("documents").select("metadata->filename").eq("metadata->>user_id", user_id).execute()
+    response = supabase.table("documents").select("metadata").eq("metadata->>user_id", user_id).execute()
     
+    #Extract unique metadata from the response
+    metadata_list = get_unique_documents(response.data) # [item['metadata'] for item in response.data if 'metadata' in item]
     # Extract unique filenames from the response
-    filenames = list(set(item['filename'] for item in response.data if 'filename' in item))
+    #filenames = list(set(item['filename'] for item in response.data if 'filename' in item))
     
-    return jsonify({"documents": filenames}), 200
+    return jsonify({"documents": metadata_list}), 200
+
+def get_unique_documents(objects: List[Dict]) -> List[Dict]:
+  unique_objects = []
+  seen_objects = set()
+
+  for obj in objects:
+    # Access the nested metadata dictionary
+    metadata = obj.get('metadata')
+    if metadata:  # Check if metadata exists
+      obj_hash = hash(tuple(metadata.items()))
+      if obj_hash not in seen_objects:
+        unique_objects.append(metadata)  # Append only the metadata dictionary
+        seen_objects.add(obj_hash)
+
+  return unique_objects
+
 
 @app.route('/delete/<filename>', methods=['DELETE', 'OPTIONS'])
 def delete_document(filename):
@@ -166,6 +203,110 @@ def delete_document(filename):
 
 @app.route('/query', methods=['POST', 'OPTIONS'])
 def query_document():
+    if request.method == 'OPTIONS':
+        return handle_options_request()
+    
+    data = request.json
+    query = data.get('query')
+    user_id = session.get('user_id', 'Not set')
+    filenames = data.get('filenames', [])
+
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+
+    count_response = supabase.table("documents").select("id", count="exact").execute()
+    total_records = count_response.count
+    
+    logger.info(f"Total records in the vector store: {total_records}")
+    
+    if total_records == 0:
+        return jsonify({"error": "No documents found in the vector store"}), 404
+    
+    vector_store = SupabaseVectorStore(
+        client=supabase,
+        embedding=embeddings,
+        table_name="documents",
+        query_name="match_documents"
+    )
+    
+    # Construct the filter for user_id and filenames
+    filter_query = supabase.table("documents").select("id", count="exact")
+    filter_query = filter_query.eq("metadata->>user_id", user_id)
+    filter_query = filter_query.in_("metadata->>filename", filenames)
+    
+    # Count filtered records
+    filtered_count_response = filter_query.execute()
+    filtered_records = filtered_count_response.count
+    
+    logger.info(f"Filtered records: {filtered_records}")
+        
+    # Construct the filter for similarity search
+    similarity_filter = {
+            "user_id": user_id,
+        #    "filename": filenames,
+    }
+    
+    # Perform the similarity search with the correct filter
+    results = vector_store.similarity_search(
+        query,
+        filter=similarity_filter
+    )
+    
+    for doc in results:
+        logger.info(f"Document filename: {doc.metadata.get('filename')}")
+    
+    if not results:
+        return jsonify({"error": "No matching documents found in similarity search"}), 404
+        
+    context = "\n".join([doc.page_content for doc in results])
+    client = anthropic.Anthropic()
+    messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": query,
+                    }
+                ]
+            }
+        ]
+    system_prompt = f"""
+        You are an AI assistant for a document chatbot. Your primary function is to answer questions based on the content of various uploaded documents, including PDFs, Word documents, Excel spreadsheets, and text files. These documents have been processed, chunked, and stored in a database.
+
+        Your responses should be:
+        1. Accurate and directly based on the information provided in the documents
+        2. Concise yet comprehensive
+        3. Professional in tone
+
+        When answering questions:
+        - Use only the information provided in the context. Do not use external knowledge or make assumptions beyond what's explicitly stated in the documents.
+        - If the answer is not contained within the given context, politely state that you don't have enough information to answer the question accurately.
+        - If asked about the source of your information, refer to the documents in general terms without specifying file names or types.
+
+        Here is the relevant context from the documents:
+
+        {context}
+
+        Please provide informative responses based on this context. If you need more information or if the question is unclear, ask for clarification.
+        """
+    stream = client.messages.create(
+        model="claude-3-5-sonnet-20240620",
+        max_tokens=1024,
+        messages=messages,
+        stream=True,
+        system=system_prompt #f"You are an AI assistant that answers questions based solely on the following content from the Supabase records:\n\n{context}\n\nDo not use any external knowledge. If the answer is not in the content, say so.",
+    )
+    
+
+    def generate():
+        for chunk in stream:
+            if chunk.type == 'content_block_delta':
+                yield chunk.delta.text
+
+    return Response(stream_with_context(generate()), content_type='text/plain')
+
+def query_document_with_groq():
     if request.method == 'OPTIONS':
         return handle_options_request()
     
@@ -235,14 +376,15 @@ def query_document():
     context = "\n".join([doc.page_content for doc in results])
 
     chat_groq = ChatGroq(
-        temperature=0.4,
-        model_name="mixtral-8x7b-32768",
+        temperature=0.1,
+        model_name="llama3-8b-8192",
         streaming=True,
-        callbacks=[StreamingStdOutCallbackHandler()]
+        callbacks=[StreamingStdOutCallbackHandler()],
+        max_tokens=1024,
     )
     
     template = """Use the following pieces of context to answer the question at the end. 
-        If you don't know the answer, just say that you don't know, don't try to make up an answer.
+        If you don't know the answer, just say that you don't know. Don't try to make up an answer.
 
         {context}
 
