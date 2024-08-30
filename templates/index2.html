@@ -8,7 +8,7 @@
       href="https://fonts.googleapis.com/css2?display=swap&amp;family=Manrope%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900"
     />
 
-    <title>DocFolio</title>
+    <title>DocFolio - Interact with documents</title>
     <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
     <link href="{{ url_for('static', filename='styles2.css')}}" rel="stylesheet">
 
@@ -29,7 +29,10 @@
                 ></path>
               </svg>
             </div>
-            <h2 class="text-[#0e141b] text-lg font-bold leading-tight tracking-[-0.015em]">DocFolio</h2>
+            <div>
+              <h2 class="text-[#0e141b] text-lg font-bold leading-tight tracking-[-0.015em]">DocFolio</h2>
+              <div class="text-sm text-gray-500 flex-row">Interact with your documents</div>
+            </div>
           </div>
           <div class="flex flex-1 justify-end gap-8">
             <button
@@ -50,8 +53,11 @@
           </div>
         </header>
         <div class="gap-1 px-6 flex flex-1 justify-center py-5">
-          <div class="layout-content-container flex flex-col w-80">
-            <h3 class="text-[#0e141b] text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">Files</h3>
+          <div class="layout-content-container flex flex-col w-81">
+            <div class="px-4 pb-2 pt-4">
+              <h3 class="text-[#0e141b] text-lg font-bold leading-tight tracking-[-0.015em]">Files</h3>
+              <div class="text-sm text-gray-500 flex-row">PDFs, Word, Excel and txt files only</div>
+            </div>
             <div class="flex px-4 py-3 flex-row">
               <input type="file" id="fileUpload" accept=".pdf,.docx,.xlsx,.txt" multiple
                 class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-10 px-4 flex-1 bg-[#e8edf3] text-[#0e141b] text-sm font-bold leading-normal tracking-[0.015em]"
@@ -66,22 +72,15 @@
                     <p class="text-sm">Processing. Please wait...</p>
                 </div>
             </div>
-            <div  id="documentList">
-                <!-- <div class="flex gap-4 bg-[#f8fafb] px-4 py-3">
-                    <div class="flex flex-1 flex-col justify-center">
-                        <p class="text-[#0e141b] text-base font-medium leading-normal">greeting.py</p>
-                        <p class="text-[#4f7396] text-sm font-normal leading-normal">Hello, I hope you're having a great day!</p>
-                        <p class="text-[#4f7396] text-sm font-normal leading-normal">5/7/22 2:30 PM, 1kb</p>
-                    </div>
-                </div> -->
+            <div id="documentList">
             </div>
           </div>
           <div class="layout-content-container flex flex-col max-w-[960px] flex-1">
             <!-- <div class="flex flex-wrap justify-between gap-3 p-4"><p class="text-[#0e141b] tracking-light text-[32px] font-bold leading-tight min-w-72">greeting.py</p></div> -->
-            <div class="flex flex-col px-4 py-3 gap-3 @container" id="chatWindow">
+            <div class="flex flex-col px-4 py-3 gap-3 @container border-stone-600" id="chatWindow">
                 
             </div>
-            <div class="flex items-center px-4 py-3 gap-3 @container">
+            <div class="flex items-center py-2 gap-3 @container">
               <label class="flex flex-col min-w-40 h-24 flex-1">
                 <div class="flex w-full flex-1 items-stretch rounded-xl h-full">
                   <textarea id="queryInput" rows="4"
@@ -89,11 +88,11 @@
                     class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-[#0e141b] focus:outline-0 focus:ring-0 border-none bg-[#e8edf3] focus:border-none h-full placeholder:text-[#4f7396] px-4 rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal"
                     ></textarea>
                   <div class="flex border-none bg-[#e8edf3] items-center justify-center pr-4 rounded-r-xl border-l-0 !pr-2">
-                    <div class="flex items-center gap-4 justify-end">
+                    <div class="flex gap-4 justify-end">
                       <button id="sendQuery"
-                        class="min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-8 px-4 bg-[#378fe6] text-[#f8fafb] text-sm font-medium leading-normal hidden @[480px]:block"
+                        class="min-w-[84px] max-w-[480px] cursor-pointer overflow-hidden rounded-xl h-8 px-4 bg-[#378fe6] text-[#f8fafb] text-sm font-medium leading-normal hidden @[480px]:block"
                       >
-                        <span class="truncate">Send</span>
+                        <span class="truncate">Submit</span>
                       </button>
                     </div>
                   </div>
@@ -104,7 +103,7 @@
         </div>
         <footer class="flex justify-center">
             <div class="flex max-w-[960px] flex-1 flex-col">
-              <footer class="flex flex-col gap-6 px-5 py-5 text-center @container">
+              <footer class="flex flex-col gap-6 px-5 py-4 text-center @container">
                 <p class="text-[#4f7396] text-base font-normal leading-normal">Copyright (c) 2024 DevObi LLC. All rights reserved. devobi.com</p>
               </footer>
             </div>

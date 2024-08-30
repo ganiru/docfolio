@@ -3,7 +3,7 @@ import os
 from typing import Dict, List
 import unicodedata
 import logging
-from flask import Flask, json, render_template, request, jsonify, session, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, session, Response, stream_with_context
 from flask_cors import CORS
 from langchain_groq import ChatGroq
 from werkzeug.utils import secure_filename
@@ -40,8 +40,7 @@ ALLOWED_EXTENSIONS = {'txt', 'pdf', 'docx', 'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Embeddings model
-# EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-embeddings = OpenAIEmbeddings() # HuggingFaceEmbeddings(model_name=EMBEDDINGS_MODEL)
+embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 @app.before_request
 def set_client_session():
@@ -116,7 +115,7 @@ def upload_file():
 
             loader = get_loader(file_path)
             documents = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=80, length_function=len, separators=["\n\n", "\n", " ", ""])
             texts = text_splitter.split_documents(documents)
             
             for text in texts:
@@ -174,16 +173,16 @@ def get_unique_documents(objects: List[Dict]) -> List[Dict]:
   seen_objects = set()
 
   for obj in objects:
-    # Access the nested metadata dictionary
-    metadata = obj.get('metadata')
-    if metadata:  # Check if metadata exists
-      obj_hash = hash(tuple(metadata.items()))
-      if obj_hash not in seen_objects:
-        unique_objects.append(metadata)  # Append only the metadata dictionary
-        seen_objects.add(obj_hash)
+      metadata = obj.get('metadata')
+      if metadata:
+          # Create a new dictionary without the 'page' property
+          filtered_metadata = {k: v for k, v in metadata.items() if k != 'page'}
+          obj_hash = hash(tuple(sorted(filtered_metadata.items())))
+          if obj_hash not in seen_objects:
+              unique_objects.append(metadata)  # Append the original metadata
+              seen_objects.add(obj_hash)
 
   return unique_objects
-
 
 @app.route('/delete/<filename>', methods=['DELETE', 'OPTIONS'])
 def delete_document(filename):
@@ -199,6 +198,7 @@ def delete_document(filename):
         return jsonify({"message": f"Document {filename} deleted successfully"}), 200
     else:
         return jsonify({"error": "Document not found or couldn't be deleted"}), 404
+
 
 
 @app.route('/query', methods=['POST', 'OPTIONS'])
@@ -226,7 +226,8 @@ def query_document():
         client=supabase,
         embedding=embeddings,
         table_name="documents",
-        query_name="match_documents"
+        query_name="match_documents",
+        chunk_size=800
     )
     
     # Construct the filter for user_id and filenames
@@ -252,8 +253,8 @@ def query_document():
         filter=similarity_filter
     )
     
-    for doc in results:
-        logger.info(f"Document filename: {doc.metadata.get('filename')}")
+    # for doc in results:
+    #    logger.info(f"Document: {doc.page_content}")
     
     if not results:
         return jsonify({"error": "No matching documents found in similarity search"}), 404
@@ -272,29 +273,28 @@ def query_document():
             }
         ]
     system_prompt = f"""
-        You are an AI assistant for a document chatbot. Your primary function is to answer questions based on the content of various uploaded documents, including PDFs, Word documents, Excel spreadsheets, and text files. These documents have been processed, chunked, and stored in a database.
-
-        Your responses should be:
+        You are an AI assistant for a document chatbot. Your primary function is to answer questions based on the content of various uploaded documents, including PDFs, Word documents, Excel spreadsheets, and text files. These documents have been processed, chunked, and stored in a Supabase database. Your responses should be:
         1. Accurate and directly based on the information provided in the documents
         2. Concise yet comprehensive
         3. Professional in tone
 
         When answering questions:
         - Use only the information provided in the context. Do not use external knowledge or make assumptions beyond what's explicitly stated in the documents.
+        - For factual questions (e.g., word counts, specific data points), ensure your answer is precisely correct based on the provided context. If you're unsure, state that you need to verify the information.
         - If the answer is not contained within the given context, politely state that you don't have enough information to answer the question accurately.
         - If asked about the source of your information, refer to the documents in general terms without specifying file names or types.
 
         Here is the relevant context from the documents:
-
         {context}
 
         Please provide informative responses based on this context. If you need more information or if the question is unclear, ask for clarification.
         """
     stream = client.messages.create(
         model="claude-3-5-sonnet-20240620",
-        max_tokens=1024,
+        max_tokens=1000,
         messages=messages,
         stream=True,
+        temperature=0,
         system=system_prompt #f"You are an AI assistant that answers questions based solely on the following content from the Supabase records:\n\n{context}\n\nDo not use any external knowledge. If the answer is not in the content, say so.",
     )
     
@@ -383,10 +383,23 @@ def query_document_with_groq():
         max_tokens=1024,
     )
     
-    template = """Use the following pieces of context to answer the question at the end. 
-        If you don't know the answer, just say that you don't know. Don't try to make up an answer.
+    template = """You are an AI assistant for a document chatbot. Your primary function is to answer questions based on the content of various uploaded documents, including PDFs, Word documents, Excel spreadsheets, and text files. These documents have been processed, chunked, and stored in a Supabase database.
+
+        Your responses should be:
+        1. Accurate and directly based on the information provided in the documents
+        2. Concise yet comprehensive
+        3. Professional in tone
+
+        When answering questions:
+        - Use only the information provided in the context. Do not use external knowledge or make assumptions beyond what's explicitly stated in the documents.
+        - If the answer is not contained within the given context, politely state that you don't have enough information to answer the question accurately.
+        - If asked about the source of your information, refer to the documents in general terms without specifying file names or types.
+
+        Here is the relevant context from the documents:
 
         {context}
+
+        Please provide informative responses based on this context. If you need more information or if the question is unclear, ask for clarification.
 
         Question: {question}
         Answer:"""

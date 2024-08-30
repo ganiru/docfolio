@@ -8,3 +8,8 @@
   overflow-y: scroll;
   padding: 10px;
 }
+
+#documentList {
+  max-height: 70vh;
+  overflow-y: scroll;
+}
