@@ -41,8 +41,8 @@ document.addEventListener("DOMContentLoaded", function () {
             const docElement = document.createElement("div");
             // save the filename in a variable and truncate it if it's more than 20 characters
             const filename =
-              doc.filename.length > 20
-                ? doc.substring(0, 20) + "..."
+              doc.filename.length > 33
+                ? doc.filename.substring(0, 33) + "..."
                 : doc.filename;
             deleteSVG =
               '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
@@ -56,16 +56,21 @@ document.addEventListener("DOMContentLoaded", function () {
                   ? `${sizeInKB.toFixed(2)} KB`
                   : `${sizeInMB.toFixed(2)} MB`;
             }
+            let total_pages = doc.total_pages
+              ? `, ${doc.total_pages} pages`
+              : "";
 
             docElement.innerHTML = `
                <div class="flex align-center gap-4 bg-[#f8fafb] px-4 py-3">
                     <div class="flex flex-1 flex-col justify-center">
-                        <p class="text-[#0e141b] text-base font-medium leading-normal">${filename}</p>
+                        <p class="text-[#0e141b] text-base font-medium leading-normal" title="${
+                          doc.filename
+                        }">${filename}</p>
                         <p class="text-[#4f7396] text-sm font-normal leading-normal">${
                           doc.created_date && file_size
                             ? doc.created_date + ", " + file_size
                             : ""
-                        }</p>
+                        }${total_pages}</p>
                     </div>
                     <svg class="delete-button" data-filename="${
                       doc.filename
@@ -89,6 +94,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function deleteDocument(event) {
     event.stopPropagation();
     const filename = event.target.getAttribute("data-filename");
+    console.log("deleting", filename);
     fetch(`${apiURL}/delete/${filename}`, {
       method: "DELETE",
       credentials: "include",
