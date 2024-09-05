@@ -189,18 +189,13 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   function sendMessage() {
-    /*if (currentDocuments.length === 0) {
-      alert("Please select at least one document first.");
-      return;
-    }
-*/
     const query = queryInput.value;
     if (query.trim() === "") {
       alert("Please enter a query.");
       return;
     }
+    console.log("Sending query:", query);
     const messageElement = document.createElement("article");
-    // save the current time in this format MM/DD/YYYY HH:MM:SS in a variable called currentTime
     const currentTime = new Date().toLocaleString("en-US", {
       month: "numeric",
       day: "numeric",
@@ -246,44 +241,67 @@ document.addEventListener("DOMContentLoaded", function () {
       }),
     })
       .then((response) => {
+        console.log("Received response:", response);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         // clear the 'thinking'
         loadingIndicator.remove();
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let markdown = "";
 
         function readStream() {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              return;
-            }
-            const chunk = decoder.decode(value);
-            // Append the current time to the bot response
-            const currentTime = new Date().toLocaleString("en-US", {
-              month: "numeric",
-              day: "numeric",
-              year: "numeric",
-              hour: "numeric",
-              minute: "numeric",
-              second: "numeric",
-              hour12: true,
-            });
-            const botResponseTimeStamp = document.getElementById(
-              `bot-response-timestamp-${datenow}`
-            );
-            botResponseTimeStamp.textContent = currentTime;
+          reader
+            .read()
+            .then(({ done, value }) => {
+              if (done) {
+                // Convert markdown to HTML
+                var converter = new showdown.Converter();
+                botResponse.innerHTML = converter.makeHtml(markdown);
 
-            botResponse.innerHTML += chunk;
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-            readStream();
-          });
+                // Render final markdown
+                // botResponse.innerHTML = markdown;
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+                return;
+              }
+              let chunk = decoder.decode(value);
+              markdown += chunk;
+
+              // Render markdown as it comes in
+              botResponse.innerHTML = markdown;
+              chatWindow.scrollTop = chatWindow.scrollHeight;
+
+              // Update timestamp
+              const currentTime = new Date().toLocaleString("en-US", {
+                month: "numeric",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+                second: "numeric",
+                hour12: true,
+              });
+              const botResponseTimeStamp = document.getElementById(
+                `bot-response-timestamp-${datenow}`
+              );
+              botResponseTimeStamp.innerHTML = currentTime;
+
+              readStream();
+            })
+            .catch((error) => {
+              console.error("Error reading stream:", error);
+              botResponse.innerHTML += `Error: ${error.message}`;
+            });
         }
 
         readStream();
       })
       .catch((error) => {
         console.error("Error:", error);
-        aiMessageDiv.innerHTML = `Error: ${error.message}`;
-        aiMessageDiv.classList.add("error-message");
+        loadingIndicator.remove();
+        botResponse.innerHTML = `Error: ${error.message}`;
+        botResponse.classList.add("error-message");
       });
   }
   updateDocumentList();

@@ -199,10 +199,7 @@ def delete_document(filename):
     else:
         return jsonify({"error": "Document not found or couldn't be deleted"}), 404
 
-
-
-@app.route('/query', methods=['POST', 'OPTIONS'])
-def query_document():
+def query_document_with_claude():
     if request.method == 'OPTIONS':
         return handle_options_request()
     
@@ -227,7 +224,7 @@ def query_document():
         embedding=embeddings,
         table_name="documents",
         query_name="match_documents",
-        chunk_size=800
+        chunk_size=500
     )
     
     # Construct the filter for user_id and filenames
@@ -306,7 +303,8 @@ def query_document():
 
     return Response(stream_with_context(generate()), content_type='text/plain')
 
-def query_document_with_groq():
+@app.route('/query', methods=['POST', 'OPTIONS'])
+def query_document():
     if request.method == 'OPTIONS':
         return handle_options_request()
     
@@ -434,4 +432,3 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     app.run(port=port, debug=True)
-
