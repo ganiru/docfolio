@@ -215,9 +215,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const responseElement = document.createElement("article");
     responseElement.className = "mb-2";
-    responseElement.innerHTML = `<p><span class="font-bold">Bot</span> 
-    <span style='color:gray' class='text-sm' id='bot-response-timestamp-${datenow}'></span> 
-    <div class="bot-response" style="white-space: pre-wrap;"></div>
+    responseElement.innerHTML = `<p><span class="font-bold">Bot</span>
+    <span style='color:gray' class='text-sm' id='bot-response-timestamp-${datenow}'></span>
+    <div class="bot-response"></div>
     </p>`;
     chatWindow.appendChild(responseElement);
 
@@ -257,8 +257,9 @@ document.addEventListener("DOMContentLoaded", function () {
             .then(({ done, value }) => {
               if (done) {
                 // Convert markdown to HTML
-                var converter = new showdown.Converter();
-                botResponse.innerHTML = converter.makeHtml(markdown);
+                //var converter = new showdown.Converter();
+                //botResponse.innerHTML = converter.makeHtml(markdown);
+                botResponse.innerHTML = marked.parse(markdown);
 
                 // Render final markdown
                 // botResponse.innerHTML = markdown;
