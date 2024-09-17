@@ -3,7 +3,9 @@ flask-cors
 langchain
 langchain-community
 langchain-core
+langchain-groq
 langchain-huggingface
+#langchain-anthropic
 PyMuPDF
 python-dotenv
 werkzeug
@@ -13,4 +15,5 @@ openpyxl
 docx2txt
 supabase
 langchain_openai
+#anthropic
 fastapi-sessions

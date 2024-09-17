@@ -144,41 +144,92 @@
                         <div id="documentList"></div>
                     </div>
                     <div
-                        class="layout-content-container flex flex-col max-w-[960px] flex-1"
-                    >
-                        <!-- <div class="flex flex-wrap justify-between gap-3 p-4"><p class="text-[#0e141b] tracking-light text-[32px] font-bold leading-tight min-w-72">greeting.py</p></div> -->
-                        <div
-                            class="flex flex-col px-4 py-3 gap-3 @container border-stone-600"
-                            id="chatWindow"
-                        ></div>
-                        <div class="flex items-center py-2 gap-3 @container">
-                            <label class="flex flex-col min-w-40 h-24 flex-1">
-                                <div
-                                    class="flex w-full flex-1 items-stretch rounded-xl h-full"
-                                >
-                                    <textarea
-                                        id="queryInput"
-                                        rows="4"
-                                        placeholder="Send a message..."
-                                        class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-[#0e141b] focus:outline-0 focus:ring-0 border-none bg-[#e8edf3] focus:border-none h-full placeholder:text-[#4f7396] px-4 rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal"
-                                    >How often does "contract" appear in the context?</textarea>
-                                    <div
-                                        class="flex border-none bg-[#e8edf3] items-center justify-center pr-4 rounded-r-xl border-l-0 !pr-2"
-                                    >
-                                        <div class="flex gap-4 justify-end">
-                                            <button
-                                                id="sendQuery"
-                                                class="min-w-[84px] max-w-[480px] cursor-pointer overflow-hidden rounded-xl h-8 px-4 bg-[#378fe6] text-[#f8fafb] text-sm font-medium leading-normal hidden @[480px]:block"
-                                            >
-                                                <span class="truncate"
-                                                    >Submit</span
-                                                >
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
+                        class="layout-content-container flex flex-col max-w-[960px] flex-1">
+                    <!-- <iframe id="flowiseIFrame" height="100%" width="100%" frameborder="0" scrolling="no" allowfullscreen webkitallowfullscreen mozallowfullscreen>
+
+                    </iframe> -->
+                    <flowise-fullchatbot></flowise-fullchatbot>
+                    <script type="module">
+                        // Get the ID from the  URL
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const user_id = urlParams.get('id') ?? 'l'; // TODO find another way to get the id
+                        
+                        import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
+                        Chatbot.initFull({
+                         /*  
+                            chatflowid: "d8bdd611-fbde-475d-b2fa-da197210e4c4", //"729a2fee-cf8a-4ee5-9749-22c66972a9eb",
+                            apiHost: "http://localhost:3000", //"https://flowiseai-railway-production-cd23.up.railway.app",
+                            */
+                            chatflowid: "729a2fee-cf8a-4ee5-9749-22c66972a9eb",
+                            apiHost: "https://flowiseai-railway-production-cd23.up.railway.app", 
+                            chatflowConfig: {
+                                vars: {
+                                    user_id: user_id
+                                },
+                                supabaseMetadataFilter: {
+                                    user_id: user_id
+                                }
+                            },
+                            
+                            theme: {
+                                button: {
+                                    backgroundColor: '#ffffff',
+                                    right: 20,
+                                    bottom: 20,
+                                    size: 48, // small | medium | large | number
+                                    dragAndDrop: true,
+                                    iconColor: '#BDB1A3',//#3B81F6
+                                    customIconSrc: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/google-messages.svg',
+                                },
+                                chatWindow: {
+                                    showTitle: true,
+                                    title: '',
+                                    titleAvatarSrc: null,//'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/google-messages.svg',
+                                    showAgentMessages: false,
+                                    welcomeMessage: 'Hello! Ask any question about your uploaded documents',
+                                    errorMessage: 'This is a custom error message',
+                                    backgroundColor: "#ffffff",
+                                   
+                                    fontSize: 16,
+                                    poweredByTextColor: "#303235",
+                                    botMessage: {
+                                        backgroundColor: "#f7f8ff",
+                                        textColor: "#303235",
+                                        showAvatar: true,
+                                        avatarSrc: "https://cdn.usegalileo.ai/sdxl10/292f07ff-ccd5-4f0c-8df8-4bc892210389.png",
+                                    },
+                                    userMessage: {
+                                        backgroundColor: "#BDB1A3",
+                                        textColor: "#ffffff",
+                                        showAvatar: true,
+                                        avatarSrc: "https://devobi.com/images/neutral-avatar.png",
+                                    },
+                                    textInput: {
+                                        placeholder: 'Type your question',
+                                        backgroundColor: '#ffffff',
+                                        textColor: '#303235',
+                                        sendButtonColor: '#BDB1A3',
+                                        maxChars: 500,
+                                        maxCharsWarningMessage: 'You exceeded the characters limit. Please input less than 500 characters.',
+                                        autoFocus: true, // If not used, autofocus is disabled on mobile and enabled on desktop. true enables it on both, false disables it on both.
+                                        sendMessageSound: true,
+                                        // sendSoundLocation: "send_message.mp3", // If this is not used, the default sound effect will be played if sendSoundMessage is true.
+                                        receiveMessageSound: true,
+                                        // receiveSoundLocation: "receive_message.mp3", // If this is not used, the default sound effect will be played if receiveSoundMessage is true. 
+                                    },
+                                    feedback: {
+                                        color: '#303235',
+                                    },
+                                    footer: {
+                                        textColor: '#303235',
+                                        text: 'Powered by',
+                                        company: 'DevObi LLC',
+                                        companyLink: 'https://devobi.com',
+                                    }
+                                }
+                            }
+                        })
+                    </script>
                     </div>
                 </div>
                 <footer class="flex justify-center">
@@ -198,48 +249,7 @@
                 </footer>
             </div>
         </div>
-        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-        <script type="module">
-            import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
-            document.getElementById('content').innerHTML =
-              marked.parse(`The document titled "DMSMS_1.docx" provides a detailed monthly status report for the DMS/MS Support Services contract with the U.S. Coast Guard C5ISC Portsmouth Technical Services Branch. Key points include:
-
-1. **Contract Information**:
-   - Customer: U.S. Coast Guard C5ISC Portsmouth Technical Services Branch - MAO - DMS/MS
-   - Contract Name: DMS/MS Support Services
-   - Contract Number: 70Z04422FESD20003
-   - Period of Performance: 6/30/2023 â€“ 6/29/2024 (OY1)
-   - Key Contacts: Mr. John Doe (Contracting Officer), Ms. Jane Doe (Contract Specialist), Mr. Don Joe (COR), CWO Coca Cola (Technical Lead), Judas Iscariot (Contractor POC)
-
-2. **Deliverables**:
-   - Monthly Status Reports are due by the 5th business day of the following month.
-   - Quarterly Health Metrics Reports are due by the 5th business day of each third month of the fiscal year.
-
-3. **Project Work**:
-   - BoM Processing: Parts allocated and submitted for Base and OY1.
-   - Knowledge Management: Total files transferred to backup media and assistance provided in various SharePoint projects.
-   - Administrative Management: Meeting agendas/minutes produced, documents processed, CDRL response forms created, site access requests processed, and various reports and products produced.
-
-4. **Status of BoM Item Validation and Verification**:
-   - BoMs being processed, validated, and approved for loading into AVCOM.
-   - Specific BoMs pending COMPL review and those approved by the government.
-
-5. **Status of Star Cases**:
-   - Allocation and initiation of Star Cases for Base and OY1.
-   - Current status of Star Cases including those open, pending government approval, and on hold.
-
-6. **Meetings/Teleconferences**:
-   - Scheduled meetings and teleconferences for May and June, including an Expo with CG-933, Monthly STAR Case status report, C5ISC Division meeting, NSC-ILSMT, DMSMS Offsite, and AVCOM Obsolescence Working Group Meeting.
-
-7. **Completed Action Items**:
-   - Specific action items completed by Danielle, including updating graphics and slides for the AVCOM Working Group meeting.
-
-8. **Near-Term Milestones/Objectives**:
-   - Upcoming briefings, meetings, and health report meetings scheduled for May and June.
-
-The document provides a comprehensive overview of the ongoing activities, deliverables, and project status for the DMS/MS Support Services contract.`);
-          </script>
-       <!--  <script src="{{ url_for('static', filename='drawdown.js')}}"></script> -->
-        <script src="{{ url_for('static', filename='app2.js')}}"></script>
+        
+        <script src="{{ url_for('static', filename='app_flowise.js')}}"></script>
     </body>
 </html>

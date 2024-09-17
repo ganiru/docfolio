@@ -1,22 +1,23 @@
 import os
 import shutil
+from typing import Dict, List
 import unicodedata
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 import requests
+from supabase import create_client
 from werkzeug.utils import secure_filename
 from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, UnstructuredExcelLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import logging
 import uuid
 import datetime
+from langchain_community.vectorstores import SupabaseVectorStore
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -30,24 +31,19 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'xlsx', 'txt'}
-FAISS_INDEX_FOLDER = 'faiss_indexes'
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 LLM_MODEL = "llama3-8b-8192" # "mixtral-8x7b-32768"
 TEMPERATURE = 0.2
 CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 200
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['FAISS_INDEX_FOLDER'] = FAISS_INDEX_FOLDER
+
+# Supabase configuration
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+supabase = create_client(supabase_url, supabase_key)
 
 embeddings = HuggingFaceEmbeddings(model_name=EMBEDDINGS_MODEL)
-
-llm = ChatGroq(
-    groq_api_key=os.getenv('GROQ_API_KEY'),
-    model_name=LLM_MODEL,
-    temperature=TEMPERATURE,
-    streaming=False,
-)
 
 def allowed_file(filename):
     print("Filename is ", filename)
@@ -66,87 +62,87 @@ def get_loader(file_path):
     else:
         raise ValueError(f"Unsupported file type: {file_extension}")
 
+def count_paragraphs(documents):
+    # Simple paragraph counting logic
+    total_paragraphs = 0
+    for doc in documents:
+        total_paragraphs += doc.page_content.count('\n\n') + 1
+    return total_paragraphs
+
+
+@app.before_request
+def set_client_session():
+    # Get the ID from the query parameter
+    if 'id' in request.args:
+        # Set the user_id in the session
+        session['user_id'] = request.args.get('id')
+
 @app.route('/upload', methods=['POST', 'OPTIONS'])
 def upload_file():
-    print("Uploading...")
     if request.method == 'OPTIONS':
         return handle_options_request()
-    
-    if 'file' not in request.files:
+
+    if 'file' not in request.files and 'files' not in request.files:
         return jsonify({"error": "No file part"}), 400
-    
-    files = request.files.getlist('file')
+
+    files = request.files.getlist('file') if 'file' in request.files else request.files.getlist('files')
     uploaded_files = []
     errors = []
-
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['FAISS_INDEX_FOLDER'], exist_ok=True)
-
-    if 'session_id' not in session:
-        session['session_id'] = str(uuid.uuid4())
-    
-    if 'files' not in session:
-        session['files'] = []
 
     for file in files:
         if file.filename == '':
             continue
-        
-        if not isinstance(file.filename, str):
-            logger.error(f"Unexpected filename type: {type(file.filename)}")
-
-        print("** THE Filename is ", file.filename)
-        status = ''
         if file and allowed_file(file.filename):
-            try:
-                filename = sanitize_filename(file.filename)
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(file_path)
+            filename = sanitize_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            file.save(file_path)
 
-                print(">> Sanitized filename ", filename)
-                API_URL = "https://flowiseai-railway-production-cd23.up.railway.app/api/v1/vector/upsert/729a2fee-cf8a-4ee5-9749-22c66972a9eb"
+            file_size = os.path.getsize(file_path)
+            file_metadata = {
+                "filename": filename,
+                "user_id": session.get('user_id', 'Not set'),
+                "created_date": datetime.now().strftime("%m/%d/%Y %I:%M %p"),
+                "file_size": file_size,
+                "page_count": 0,  # Initialize page count
+                "paragraph_count": 0  # Initialize paragraph count
+            }
 
-                print("opening the file...")
-                # use form data to upload files
-                form_data = {
-                    "files": (file_path, open(file_path, 'rb'),'application/pdf')
-                }
-                print("file opened")
+            loader = get_loader(file_path)
+            documents = loader.load()
 
-                print(">> Sanitized filename ", filename)
-                body_data = {
-                    "returnSourceDocuments": False,
-               #     "supabaseApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNld3djcWtxb2F2cXJ1Z3BnY295Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjQzNjM1OTYsImV4cCI6MjAzOTkzOTU5Nn0.SgfiCTqxfwdPx8P-scV4QpAINQLEJgXOFXpgCzh4NNw",
-              #      "supabaseProjUrl": "https://cewwcqkqoavqrugpgcoy.supabase.co",
-             #       "tableName": "docfolio_documents",
-                }
-                response = requests.post(API_URL, data=body_data, files=form_data)
-                status = response.json()
-                session['files'].append(filename)
-                session.modified = True
-                uploaded_files.append(filename)
-                print(datetime.datetime.now(), ">>remove filepath")
+            # Extract additional metadata
+            file_metadata["page_count"] = len(documents)
+            file_metadata["paragraph_count"] = count_paragraphs(documents)
 
-                os.remove(file_path)
-                print(datetime.datetime.now(), ">>removed filepath")
-            except Exception as e:
-                logger.error(f"Error processing {filename}: {str(e)}")
-                errors.append(f"Error processing {filename}: {str(e)}")
-                print(f"Error uploading and processing {e}")
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=20, length_function=len)
+            texts = text_splitter.split_documents(documents)
+
+            for text in texts:
+                text.metadata.update(file_metadata)
+
+            vector_store = SupabaseVectorStore.from_documents(
+                documents=texts,
+                embedding=embeddings,
+                client=supabase,
+                table_name="documents",
+                query_name="match_documents"
+            )
+
+            os.remove(file_path)
+            uploaded_files.append(file_metadata)
         else:
-            logger.error(f"Invalid file type for {file.filename}")
-            errors.append(f"Invalid file type for {file.filename}")
+            errors.append(f"File type not allowed: {file.filename}")
 
     if uploaded_files:
-        message = "Files uploaded successfully"
-        print(status)
-        if errors:
-            message += f", but with some errors: {'; '.join(errors)}"
-        return jsonify({"message": message, "filenames": uploaded_files}), 200
+        uploaded_files_str = ', '.join([file['filename'] for file in uploaded_files])
+        return jsonify({"message": f"Files uploaded and processed successfully: {uploaded_files_str}"}), 200
+    elif errors:
+        return jsonify({"error": "; ".join(errors)}), 400
     else:
-        logger.error(f"No valid files were uploaded. Errors: {'; '.join(errors)}")
-        return jsonify({"error": f"No valid files were uploaded. Errors: {'; '.join(errors)}"}), 400
+        return jsonify({"error": "No valid files were uploaded"}), 400
 
+# Currently not used-
 @app.route('/query', methods=['POST'])
 def query():
     try:
@@ -162,42 +158,52 @@ def query():
 
 @app.route('/documents', methods=['GET', 'OPTIONS'])
 def get_documents():
+    print("user id session", session.get('user_id', 'Not set'))
     if request.method == 'OPTIONS':
         return handle_options_request()
     
+    # If files is not in the session, query supabase for the user's documents and save as session variable
+    #if 'files' not in session:
+    response = supabase.table("documents").select("*").eq("metadata->>user_id", session.get('user_id', 'Not set')).execute()
+    if response.data:
+        session['files'] = get_unique_documents(response.data) 
+    else:
+        session['files'] = []
+
     return jsonify({"documents": session.get('files', [])}), 200
+
+
+def get_unique_documents(objects: List[Dict]) -> List[Dict]:
+  unique_objects = []
+  seen_objects = set()
+
+  for obj in objects:
+      metadata = obj.get('metadata')
+      if metadata:
+          # Create a new dictionary without the 'page' property
+          filtered_metadata = {k: v for k, v in metadata.items() if k != 'page'}
+          obj_hash = hash(tuple(sorted(filtered_metadata.items())))
+          if obj_hash not in seen_objects:
+              unique_objects.append(metadata)  # Append the original metadata
+              seen_objects.add(obj_hash)
+
+  return unique_objects
+
 
 @app.route('/delete/<filename>', methods=['DELETE'])
 def delete_document(filename):
-    print(session['session_id'])
-    try:
-        # Delete FAISS index
-        index_path = os.path.join(app.config['FAISS_INDEX_FOLDER'], f"{session['session_id']}_{filename}.faiss")
-        if os.path.exists(index_path):
-            if os.path.isdir(index_path):
-                shutil.rmtree(index_path)
-            else:
-                os.remove(index_path)
-            logger.info(f"Deleted FAISS index at {index_path}")
-        else:
-            logger.warning(f"FAISS index not found at {index_path}")
-        
-        if filename in session['files']:
-            session['files'].remove(filename)
-            session.modified = True
-            logger.info(f"Removed {filename} from session files")
-        
-        return jsonify({"message": f"Document {filename} deleted successfully"}), 200
-    except PermissionError as pe:
-        logger.error(f"Permission error while deleting {filename}: {str(pe)}")
-        return jsonify({"error": f"Permission denied when deleting {filename}. Please check file permissions."}), 403
-    except Exception as e:
-        logger.error(f"Error deleting {filename}: {str(e)}")
-        return jsonify({"error": f"Failed to delete document {filename}: {str(e)}"}), 500
+    if request.method == 'OPTIONS':
+        return handle_options_request()
 
-@app.route('/test', methods=['GET'])
-def test():
-    return jsonify({"message": "<table style='border:solid 1px gray' border=1><tr style='background-color:gray; color:white'><th>head1</th><th>h2</th></tr><tr><td>some sample</td><td>Some thing else</td></tr></table>"}), 200
+    user_id =session.get('user_id', 'Not set')  # This should be determined based on your authentication system
+
+    # Delete the document from Supabase
+    response = supabase.table("documents").delete().eq("metadata->>filename", filename).eq("metadata->>user_id", user_id).execute()
+
+    if response.data:
+        return jsonify({"message": f"Document {filename} deleted successfully"}), 200
+    else:
+        return jsonify({"error": "Document not found or couldn't be deleted"}), 404
 
 def handle_options_request():
     response = app.make_default_options_response()
@@ -212,7 +218,7 @@ def handle_options_request():
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('index3.html')
 
 def sanitize_filename(filename):
     filename = unicodedata.normalize('NFKD', filename)
@@ -221,8 +227,5 @@ def sanitize_filename(filename):
 
 if __name__ == '__main__':
     logger.info("Starting server")
-    port = int(os.environ.get('PORT', 8080))
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(app.config['FAISS_INDEX_FOLDER'], exist_ok=True)
-    logger.info("UPLOAD_FOLDER and FAISS_INDEX_FOLDER set")
+    port = int(os.environ.get('PORT', 8000))
     app.run(port=port, debug=True)

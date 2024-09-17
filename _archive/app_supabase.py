@@ -392,7 +392,8 @@ def query_document():
         - Use only the information provided in the context. Do not use external knowledge or make assumptions beyond what's explicitly stated in the documents.
         - If the answer is not contained within the given context, politely state that you don't have enough information to answer the question accurately.
         - If asked about the source of your information, refer to the documents in general terms without specifying file names or types.
-
+        - Format the response in markdown format, so that it looks nice and professional when rendered.
+        
         Here is the relevant context from the documents:
 
         {context}
