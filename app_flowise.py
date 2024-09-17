@@ -9,14 +9,14 @@ from supabase import create_client
 from werkzeug.utils import secure_filename
 from langchain_community.document_loaders import PyMuPDFLoader, Docx2txtLoader, UnstructuredExcelLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from dotenv import load_dotenv
 import logging
 import uuid
-import datetime
+from datetime import datetime
 from langchain_community.vectorstores import SupabaseVectorStore
 
 load_dotenv()
@@ -29,7 +29,7 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-UPLOAD_FOLDER = 'uploads'
+app.config['UPLOAD_FOLDER'] ='uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'xlsx', 'txt'}
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 LLM_MODEL = "llama3-8b-8192" # "mixtral-8x7b-32768"
@@ -43,7 +43,8 @@ supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
 supabase = create_client(supabase_url, supabase_key)
 
-embeddings = HuggingFaceEmbeddings(model_name=EMBEDDINGS_MODEL)
+# Embeddings
+embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 def allowed_file(filename):
     print("Filename is ", filename)
@@ -228,4 +229,4 @@ def sanitize_filename(filename):
 if __name__ == '__main__':
     logger.info("Starting server")
     port = int(os.environ.get('PORT', 8000))
-    app.run(port=port, debug=True)
+    app.run(port=8000, debug=True)
