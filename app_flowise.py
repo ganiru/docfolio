@@ -47,7 +47,6 @@ supabase = create_client(supabase_url, supabase_key)
 embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 def allowed_file(filename):
-    print("Filename is ", filename)
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_loader(file_path):
@@ -94,14 +93,14 @@ def upload_file():
         if file.filename == '':
             continue
         if file and allowed_file(file.filename):
-            filename = sanitize_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file_name = sanitize_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_name)
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             file.save(file_path)
 
             file_size = os.path.getsize(file_path)
             file_metadata = {
-                "filename": filename,
+                "file_name": file_name,
                 "user_id": session.get('user_id', 'Not set'),
                 "created_date": datetime.now().strftime("%m/%d/%Y %I:%M %p"),
                 "file_size": file_size,
@@ -136,7 +135,7 @@ def upload_file():
             errors.append(f"File type not allowed: {file.filename}")
 
     if uploaded_files:
-        uploaded_files_str = ', '.join([file['filename'] for file in uploaded_files])
+        uploaded_files_str = ', '.join([file['file_name'] for file in uploaded_files])
         return jsonify({"message": f"Files uploaded and processed successfully: {uploaded_files_str}"}), 200
     elif errors:
         return jsonify({"error": "; ".join(errors)}), 400
@@ -152,7 +151,6 @@ def query():
         response = requests.post(API_URL, json=question)
         resp = response.json()
 
-        print(resp['text'])
         return jsonify({"response": response.json()['text']}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -166,6 +164,7 @@ def get_documents():
     # If files is not in the session, query supabase for the user's documents and save as session variable
     #if 'files' not in session:
     response = supabase.table("documents").select("*").eq("metadata->>user_id", session.get('user_id', 'Not set')).execute()
+
     if response.data:
         session['files'] = get_unique_documents(response.data) 
     else:
@@ -175,34 +174,35 @@ def get_documents():
 
 
 def get_unique_documents(objects: List[Dict]) -> List[Dict]:
-  unique_objects = []
-  seen_objects = set()
+    unique_objects = []
+    seen_objects = set()
 
-  for obj in objects:
-      metadata = obj.get('metadata')
-      if metadata:
-          # Create a new dictionary without the 'page' property
-          filtered_metadata = {k: v for k, v in metadata.items() if k != 'page'}
-          obj_hash = hash(tuple(sorted(filtered_metadata.items())))
-          if obj_hash not in seen_objects:
-              unique_objects.append(metadata)  # Append the original metadata
-              seen_objects.add(obj_hash)
+    for obj in objects:
+        metadata = obj.get('metadata')
+        if metadata:
+            # Create a new dictionary without the 'loc' property
+            filtered_metadata = {k: v for k, v in metadata.items() if k != 'loc'}
+            # Convert the filtered metadata to a tuple of sorted items
+            hashable_metadata = tuple(sorted((k, str(v)) for k, v in filtered_metadata.items()))
+            if hashable_metadata not in seen_objects:
+                unique_objects.append(metadata)  # Append the original metadata
+                seen_objects.add(hashable_metadata)
+    print('unique docs', unique_objects)
+    return unique_objects
 
-  return unique_objects
 
-
-@app.route('/delete/<filename>', methods=['DELETE'])
-def delete_document(filename):
+@app.route('/delete/<file_name>', methods=['DELETE'])
+def delete_document(file_name):
     if request.method == 'OPTIONS':
         return handle_options_request()
 
     user_id =session.get('user_id', 'Not set')  # This should be determined based on your authentication system
 
     # Delete the document from Supabase
-    response = supabase.table("documents").delete().eq("metadata->>filename", filename).eq("metadata->>user_id", user_id).execute()
+    response = supabase.table("documents").delete().eq("metadata->>file_name", file_name).eq("metadata->>user_id", user_id).execute()
 
     if response.data:
-        return jsonify({"message": f"Document {filename} deleted successfully"}), 200
+        return jsonify({"message": f"Document {file_name} deleted successfully"}), 200
     else:
         return jsonify({"error": "Document not found or couldn't be deleted"}), 404
 
@@ -221,8 +221,8 @@ def handle_options_request():
 def home():
     return render_template('index3.html')
 
-def sanitize_filename(filename):
-    filename = unicodedata.normalize('NFKD', filename)
+def sanitize_filename(file_name):
+    filename = unicodedata.normalize('NFKD', file_name)
     filename = filename.encode('ASCII', 'ignore').decode('ASCII')
     return secure_filename(filename)
 
